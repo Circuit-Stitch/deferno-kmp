@@ -1,8 +1,13 @@
 package com.circuitstitch.deferno.core.data.outbox
 
 import com.circuitstitch.deferno.core.model.DefinitionState
+import com.circuitstitch.deferno.core.model.Habit
+import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Priority
+import com.circuitstitch.deferno.core.model.plugin.Item
+import com.circuitstitch.deferno.core.model.plugin.Targeted
+import com.circuitstitch.deferno.core.model.recipe.ParityRecipe
 import kotlin.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -23,15 +28,45 @@ import kotlin.test.assertTrue
  */
 class DefinitionMutationTest {
 
+    private val created = Instant.parse("2026-05-20T16:11:42Z")
     private val deadline = Instant.parse("2026-06-08T17:00:00Z")
     private val wanted = Instant.parse("2026-06-05T09:00:00Z")
 
-    private fun fields(
+    /**
+     * A cached recurring definition as the store now holds it (#422).
+     *
+     * These intents transformed a `DefinitionFields` before the flip — a hand-rolled kind-neutral
+     * projection of the four values a definition edit reads or writes, needed because Habit, Chore and
+     * Event are three data classes with no supertype. The cache holds the plugin-shaped record now, so
+     * the projection *is* the record and each transform is a Family swap.
+     *
+     * The row is a Habit because the intents address a raw item id and the transforms name no kind; the
+     * kind picks the endpoint alone, which the per-kind path assertions above cover.
+     */
+    private fun definition(
         state: DefinitionState = DefinitionState.Active,
         targetDate: Instant? = null,
         priority: Priority = Priority.Normal,
         completeBy: Instant? = null,
-    ) = DefinitionFields(state, targetDate, priority, completeBy)
+    ): Item = ParityRecipe.read(
+        Habit(
+            id = HabitId("x"),
+            orgSlug = "u-test",
+            title = "definition-x",
+            definitionState = state,
+            targetDate = targetDate,
+            priority = priority,
+            completeBy = completeBy,
+            dateCreated = created,
+        ),
+    )
+
+    /**
+     * This record written back as the row it round-trips to — how a "touches nothing else" assertion is
+     * spelled now. Comparing two [Item]s directly would compare two plugin *lists*, whose equality is
+     * ordered, and a swap appends: the row is the order-free form of the same claim.
+     */
+    private fun Item.asRow(): Habit = ParityRecipe.writeHabit(this)
 
     // --- SetDefinitionTargetDate: the soft date, per kind ---
 
@@ -71,20 +106,34 @@ class DefinitionMutationTest {
         // The commonest recurring shape: a lapsed definition whose complete_by cursor sits in the past.
         // The backend's clamp_target_date (#629) pulls a later target down to the deadline at write time,
         // so an unclamped optimistic apply would show a date the server never stores.
-        val lapsed = fields(completeBy = deadline)
+        val lapsed = definition(completeBy = deadline)
         val late = SetDefinitionTargetDate("x", ItemKind.Habit, Instant.parse("2026-06-09T09:00:00Z"))
-        assertEquals(deadline, late.apply(lapsed).targetDate)
-        assertEquals(late.apply(lapsed), late.apply(late.apply(lapsed)), "apply must be idempotent")
+        assertEquals(deadline, late.apply(lapsed).targeted.targetDate)
+        assertEquals(late.apply(lapsed).asRow(), late.apply(late.apply(lapsed)).asRow(), "apply must be idempotent")
 
         // Inside the deadline it is stored verbatim…
-        assertEquals(wanted, SetDefinitionTargetDate("x", ItemKind.Habit, wanted).apply(lapsed).targetDate)
+        assertEquals(wanted, SetDefinitionTargetDate("x", ItemKind.Habit, wanted).apply(lapsed).targeted.targetDate)
         // …and the bound is INCLUSIVE: exactly-at-the-deadline is not "past" it.
-        assertEquals(deadline, SetDefinitionTargetDate("x", ItemKind.Habit, deadline).apply(lapsed).targetDate)
+        assertEquals(deadline, SetDefinitionTargetDate("x", ItemKind.Habit, deadline).apply(lapsed).targeted.targetDate)
         // With no deadline there is nothing to clamp against.
         val far = Instant.parse("2030-01-01T00:00:00Z")
-        assertEquals(far, SetDefinitionTargetDate("x", ItemKind.Habit, far).apply(fields()).targetDate)
+        assertEquals(far, SetDefinitionTargetDate("x", ItemKind.Habit, far).apply(definition()).targeted.targetDate)
         // And a clear is never clamped into a value.
-        assertNull(SetDefinitionTargetDate("x", ItemKind.Habit, null).apply(lapsed).targetDate)
+        assertNull(SetDefinitionTargetDate("x", ItemKind.Habit, null).apply(lapsed).targeted.targetDate)
+    }
+
+    /**
+     * A clear **unloads** the target Family rather than loading a member equal to its own silence
+     * (#422). Every transform here goes through `loading` for that reason: a list holding a plugin that
+     * says nothing would make two plugin lists correspond to one row, and the recipe round trip an
+     * equivalence rather than an identity.
+     */
+    @Test
+    fun clearingTheTargetDateUnloadsTheFamily() {
+        val targeted = definition(targetDate = wanted)
+        val cleared = SetDefinitionTargetDate("x", ItemKind.Habit, null).apply(targeted)
+        assertFalse(cleared.plugins.any { it is Targeted })
+        assertNull(cleared.targeted.targetDate)
     }
 
     @Test
@@ -93,23 +142,26 @@ class DefinitionMutationTest {
         // against that; sending our (possibly stale) clamped value could overwrite a date it would keep.
         val past = Instant.parse("2026-06-09T09:00:00Z")
         val intent = SetDefinitionTargetDate("h1", ItemKind.Habit, past)
-        assertEquals(deadline, intent.apply(fields(completeBy = deadline)).targetDate)
+        assertEquals(deadline, intent.apply(definition(completeBy = deadline)).targeted.targetDate)
         assertEquals("""{"target_date":"2026-06-09T09:00:00Z"}""", intent.toRequest().body)
     }
 
     @Test
     fun setDefinitionTargetDateBeforeImageCarriesTheOldDateOrAnExplicitNull() {
         val intent = SetDefinitionTargetDate("h1", ItemKind.Habit, wanted)
-        assertEquals("""{"target_date":"2026-06-08T17:00:00Z"}""", intent.beforeValues(fields(targetDate = deadline)).toString())
+        assertEquals(
+            """{"target_date":"2026-06-08T17:00:00Z"}""",
+            intent.beforeValues(definition(targetDate = deadline)).toString(),
+        )
         // The same key the body uses, so a reader can zip old→new — an unset old date is an explicit null.
-        assertEquals("""{"target_date":null}""", intent.beforeValues(fields()).toString())
+        assertEquals("""{"target_date":null}""", intent.beforeValues(definition()).toString())
     }
 
     @Test
     fun setDefinitionTargetDateTouchesNothingElseOnTheRow() {
-        val before = fields(state = DefinitionState.InReview, priority = Priority.Fire, completeBy = deadline)
+        val before = definition(state = DefinitionState.InReview, priority = Priority.Fire, completeBy = deadline)
         val after = SetDefinitionTargetDate("x", ItemKind.Habit, wanted).apply(before)
-        assertEquals(before.copy(targetDate = wanted), after)
+        assertEquals(before.asRow().copy(targetDate = wanted), after.asRow())
     }
 
     // --- SetDefinitionPriority: the urgency bucket, per kind ---
@@ -150,17 +202,17 @@ class DefinitionMutationTest {
 
     @Test
     fun setDefinitionPriorityAppliesIsIdempotentAndTouchesNothingElse() {
-        val before = fields(state = DefinitionState.InReview, targetDate = wanted, priority = Priority.Normal)
+        val before = definition(state = DefinitionState.InReview, targetDate = wanted, priority = Priority.Normal)
         val intent = SetDefinitionPriority("x", ItemKind.Chore, Priority.Backlog)
-        assertEquals(before.copy(priority = Priority.Backlog), intent.apply(before))
-        assertEquals(intent.apply(before), intent.apply(intent.apply(before)), "apply must be idempotent")
+        assertEquals(before.asRow().copy(priority = Priority.Backlog), intent.apply(before).asRow())
+        assertEquals(intent.apply(before).asRow(), intent.apply(intent.apply(before)).asRow(), "apply must be idempotent")
     }
 
     @Test
     fun setDefinitionPriorityBeforeImageCarriesTheOldBucketAsAToken() {
         // Always a real value — priority is never absent on a row — so this arm has no null branch.
         val intent = SetDefinitionPriority("x", ItemKind.Chore, Priority.Backlog)
-        assertEquals("""{"priority":"fire"}""", intent.beforeValues(fields(priority = Priority.Fire)).toString())
+        assertEquals("""{"priority":"fire"}""", intent.beforeValues(definition(priority = Priority.Fire)).toString())
     }
 
     // --- Targets + the Task guard, shared by both kind-scoped intents ---

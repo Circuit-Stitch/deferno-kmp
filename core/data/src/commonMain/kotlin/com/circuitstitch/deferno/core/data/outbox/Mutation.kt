@@ -19,6 +19,14 @@ import com.circuitstitch.deferno.core.model.ThemeMode
 import com.circuitstitch.deferno.core.model.UserSettings
 import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.core.model.completionResolution
+import com.circuitstitch.deferno.core.model.plugin.Anchor
+import com.circuitstitch.deferno.core.model.plugin.Describable
+import com.circuitstitch.deferno.core.model.plugin.Item
+import com.circuitstitch.deferno.core.model.plugin.Lifecycle
+import com.circuitstitch.deferno.core.model.plugin.Plugin
+import com.circuitstitch.deferno.core.model.plugin.Taggable
+import com.circuitstitch.deferno.core.model.plugin.Targeted
+import com.circuitstitch.deferno.core.model.plugin.loading
 import com.circuitstitch.deferno.core.network.mapper.OccurrenceKind
 import com.circuitstitch.deferno.core.network.mapper.toWireToken
 import kotlinx.datetime.LocalDate
@@ -90,21 +98,43 @@ sealed interface Mutation {
 }
 
 /**
- * A [Mutation] against a single existing [Task]. Carries the pure optimistic transform [applyTo] the
+ * A [Mutation] against a single existing item. Carries the pure optimistic transform [applyTo] the
  * writer applies to the cached row the instant the user acts (ADR-0001 optimistic apply) — before the
  * request ever reaches the server.
+ *
+ * **The intent stays wire-shaped; only the transform moved.** A mutation describes a `PATCH`, so its
+ * vocabulary follows the wire and its target is still `task:{id}` (ADR-0056). What changed at #422 is
+ * what it applies to: the cache holds the plugin-shaped record, so [applyTo] takes and returns an
+ * [Item] and each transform is a **Family swap**. A set-deadline stops being a field copy and becomes
+ * "unload the anchor, load a deadline".
+ *
+ * Every swap goes through `loading`, never `replacingFamilyOf` directly, so a transform that clears a
+ * family's last field unloads it rather than loading a plugin equal to its own silence. That is the
+ * sparseness rule the recipe round trip rests on.
  */
 sealed interface TaskMutation : Mutation {
     val taskId: TaskId
     override val target: String get() = "task:${taskId.value}"
 
     /**
-     * The optimistic local effect — a **pure** transform of the cached [task] (no side effects, no
-     * exceptions). It must be replay-safe: `applyTo(applyTo(t)) == applyTo(t)`, mirroring the
-     * idempotence of the wire intent, so a double-apply (e.g. a re-enqueue) never compounds.
+     * The optimistic local effect — a **pure** transform of the cached [item] (no side effects, no
+     * exceptions). It must be replay-safe: `applyTo(applyTo(i)) == applyTo(i)`, mirroring the
+     * idempotence of the wire intent, so a double-apply (a re-enqueue, say) never compounds.
      */
-    fun applyTo(task: Task): Task
+    fun applyTo(item: Item): Item
 }
+
+/** Load [member] in this item's plugin list, unloading its family when the member says nothing. */
+private fun Item.swapping(member: Plugin): Item = copy(plugins = plugins.loading(member))
+
+/**
+ * This item's anchor read as a deadline, or an empty one — the base a deadline edit copies onto.
+ *
+ * Every [TaskMutation] targets a Task and a Task's anchor is always a `Deadline`, so the fallback is
+ * unreachable in practice. It is there because the transform must be total: an [Item] names no kind, so
+ * nothing in the type system says this one is not an appointment.
+ */
+private fun Item.deadline(): Anchor.Deadline = anchor as? Anchor.Deadline ?: Anchor.Deadline()
 
 /**
  * A [Mutation] against one day's plan *ordering* for `(date, tz)`. The plan store holds only the
@@ -164,25 +194,32 @@ sealed interface SettingsMutation : Mutation {
 
 /** Set a Task's [WorkingState] (`open`/`in-progress`/`in-review`/`done`/`dropped`). */
 data class SetWorkingState(override val taskId: TaskId, val state: WorkingState) : TaskMutation {
-    override fun applyTo(task: Task): Task = task.copy(workingState = state)
+    override fun applyTo(item: Item): Item =
+        item.swapping(item.progress.copy(lifecycle = Lifecycle.Working(state)))
     override fun toRequest(): OutboxRequest = patchTask(taskId) { put("status", state.toWireToken()) }
 }
 
 /** Rename a Task. */
 data class Rename(override val taskId: TaskId, val title: String) : TaskMutation {
-    override fun applyTo(task: Task): Task = task.copy(title = title)
+    // Title lives on Core, not in a Family: a row would still carry it saying nothing about when, how
+    // often or how strongly (ADR-0055). So this is the one Task intent that is still a field copy.
+    override fun applyTo(item: Item): Item = item.copy(core = item.core.copy(title = title))
     override fun toRequest(): OutboxRequest = patchTask(taskId) { put("title", title) }
 }
 
 /** Set a Task's deadline. */
 data class SetDeadline(override val taskId: TaskId, val completeBy: Instant) : TaskMutation {
-    override fun applyTo(task: Task): Task = task.copy(completeBy = completeBy)
+    override fun applyTo(item: Item): Item =
+        item.swapping(item.deadline().copy(completeBy = completeBy))
     override fun toRequest(): OutboxRequest = patchTask(taskId) { put("complete_by", completeBy.toString()) }
 }
 
 /** Clear a Task's deadline — `null` means "clear it" (ADR-0011), distinct from omit. */
 data class ClearDeadline(override val taskId: TaskId) : TaskMutation {
-    override fun applyTo(task: Task): Task = task.copy(completeBy = null)
+    // Clearing the instant may leave the whole Family silent — a deadline with no instant and no clock
+    // time says nothing — in which case `swapping` unloads it rather than loading an empty one.
+    override fun applyTo(item: Item): Item =
+        item.swapping(item.deadline().copy(completeBy = null))
     override fun toRequest(): OutboxRequest = patchTask(taskId) { put("complete_by", JsonNull) }
 }
 
@@ -193,7 +230,8 @@ data class ClearDeadline(override val taskId: TaskId) : TaskMutation {
  * ADR-0011). Sent as an `"HH:MM"` string (the server reads it back leniently as `"HH:MM:SS"`).
  */
 data class SetDeadlineTime(override val taskId: TaskId, val timeOfDay: LocalTime?) : TaskMutation {
-    override fun applyTo(task: Task): Task = task.copy(deadlineTimeOfDay = timeOfDay)
+    override fun applyTo(item: Item): Item =
+        item.swapping(item.deadline().copy(timeOfDay = timeOfDay))
     override fun toRequest(): OutboxRequest = patchTask(taskId) {
         if (timeOfDay == null) put("deadline_time_of_day", JsonNull) else put("deadline_time_of_day", timeOfDay.toString())
     }
@@ -201,19 +239,19 @@ data class SetDeadlineTime(override val taskId: TaskId, val timeOfDay: LocalTime
 
 /** Set a Task's description body. */
 data class SetDescription(override val taskId: TaskId, val description: String) : TaskMutation {
-    override fun applyTo(task: Task): Task = task.copy(description = description)
+    override fun applyTo(item: Item): Item = item.swapping(Describable(description))
     override fun toRequest(): OutboxRequest = patchTask(taskId) { put("description", description) }
 }
 
 /** Clear a Task's description — explicit `null` = "clear it". */
 data class ClearDescription(override val taskId: TaskId) : TaskMutation {
-    override fun applyTo(task: Task): Task = task.copy(description = null)
+    override fun applyTo(item: Item): Item = item.swapping(Describable(null))
     override fun toRequest(): OutboxRequest = patchTask(taskId) { put("description", JsonNull) }
 }
 
 /** Replace a Task's labels. (An empty list clears them; the field is always present, never absent.) */
 data class SetLabels(override val taskId: TaskId, val labels: List<String>) : TaskMutation {
-    override fun applyTo(task: Task): Task = task.copy(labels = labels)
+    override fun applyTo(item: Item): Item = item.swapping(Taggable(labels))
     override fun toRequest(): OutboxRequest = patchTask(taskId) {
         putJsonArray("labels") { labels.forEach { add(it) } }
     }
@@ -221,7 +259,7 @@ data class SetLabels(override val taskId: TaskId, val labels: List<String>) : Ta
 
 /** Pin or unpin a Task. */
 data class SetPinned(override val taskId: TaskId, val pinned: Boolean) : TaskMutation {
-    override fun applyTo(task: Task): Task = task.copy(pinned = pinned)
+    override fun applyTo(item: Item): Item = item.swapping(item.priority.copy(pinned = pinned))
     override fun toRequest(): OutboxRequest = patchTask(taskId) { put("pinned", pinned) }
 }
 
@@ -236,7 +274,7 @@ data class SetPinned(override val taskId: TaskId, val pinned: Boolean) : TaskMut
  * silent no-op server-side, the clear MUST emit an explicit `null` (ADR-0011).
  */
 data class SetTargetDate(override val taskId: TaskId, val targetDate: Instant?) : TaskMutation {
-    override fun applyTo(task: Task): Task = task.copy(targetDate = targetDate)
+    override fun applyTo(item: Item): Item = item.swapping(Targeted(targetDate))
     override fun toRequest(): OutboxRequest = patchTask(taskId) {
         if (targetDate == null) put("target_date", JsonNull) else put("target_date", targetDate.toString())
     }
@@ -259,7 +297,7 @@ data class SetTargetDate(override val taskId: TaskId, val targetDate: Instant?) 
  * unchanged and the reason for it is stronger: a loud rejection would at least be observable.
  */
 data class SetPriority(override val taskId: TaskId, val priority: Priority) : TaskMutation {
-    override fun applyTo(task: Task): Task = task.copy(priority = priority)
+    override fun applyTo(item: Item): Item = item.swapping(item.priority.copy(priority = priority))
     override fun toRequest(): OutboxRequest = patchTask(taskId) { put("priority", priority.toWireToken()) }
 }
 
@@ -270,7 +308,8 @@ data class SetPriority(override val taskId: TaskId, val priority: Priority) : Ta
  * absence from the snapshot — either way the row stays deleted locally, ADR-0001 LWW).
  */
 data class DeleteTask(override val taskId: TaskId, val deletedAt: Instant) : TaskMutation {
-    override fun applyTo(task: Task): Task = task.copy(deletedAt = deletedAt)
+    // The tombstone is Core bookkeeping, like the title above — not a Family.
+    override fun applyTo(item: Item): Item = item.copy(core = item.core.copy(deletedAt = deletedAt))
 
     // No `activity` stamp (#364): the backend's soft-delete migration covered comments, attachments and
     // occurrence-clears but NOT item delete, so this stays a bodiless `DELETE` with no entity to merge
@@ -289,35 +328,43 @@ data class DeleteTask(override val taskId: TaskId, val deletedAt: Instant) : Tas
  * description edit **omits** the key (the reader renders "previously unavailable") rather than falsely
  * claiming the old body was empty.
  */
-internal fun TaskMutation.beforeValues(task: Task): JsonObject? = when (this) {
-    is SetWorkingState -> buildJsonObject { put("status", task.workingState.toWireToken()) }
-    is Rename -> buildJsonObject { put("title", task.title) }
+internal fun TaskMutation.beforeValues(item: Item): JsonObject? = when (this) {
+    is SetWorkingState -> buildJsonObject {
+        put("status", (item.progress.lifecycle as? Lifecycle.Working)?.state.orOpen().toWireToken())
+    }
+    is Rename -> buildJsonObject { put("title", item.core.title) }
     is SetDeadline, is ClearDeadline -> buildJsonObject {
-        val by = task.completeBy
+        val by = item.deadline().completeBy
         if (by == null) put("complete_by", JsonNull) else put("complete_by", by.toString())
     }
     is SetDeadlineTime -> buildJsonObject {
-        val at = task.deadlineTimeOfDay
+        val at = item.deadline().timeOfDay
         if (at == null) put("deadline_time_of_day", JsonNull) else put("deadline_time_of_day", at.toString())
     }
     is SetDescription, is ClearDescription -> buildJsonObject {
-        if (task.hydration == HydrationState.Full) {
-            val desc = task.description
+        if (item.core.hydration == HydrationState.Full) {
+            val desc = item.describable.description
             if (desc == null) put("description", JsonNull) else put("description", desc)
         }
         // else: omit "description" — the old body is unknown on an un-hydrated (Summary) row.
     }
-    is SetLabels -> buildJsonObject { putJsonArray("labels") { task.labels.forEach { add(it) } } }
-    is SetPinned -> buildJsonObject { put("pinned", task.pinned) }
+    is SetLabels -> buildJsonObject { putJsonArray("labels") { item.taggable.labels.forEach { add(it) } } }
+    is SetPinned -> buildJsonObject { put("pinned", item.priority.pinned) }
     is SetTargetDate -> buildJsonObject {
-        val want = task.targetDate
+        val want = item.targeted.targetDate
         if (want == null) put("target_date", JsonNull) else put("target_date", want.toString())
     }
     // The old bucket is always a real value (never absent — it defaults to Normal), so unlike the
     // nullable fields above this arm has no null branch to consider.
-    is SetPriority -> buildJsonObject { put("priority", task.priority.toWireToken()) }
+    is SetPriority -> buildJsonObject { put("priority", item.priority.priority.toWireToken()) }
     is DeleteTask -> null
 }
+
+/**
+ * A Task's working state, or the wire default. `Open` is what a Task row with no status decodes to, so
+ * a record whose Progress says nothing reports the same before-image the row itself would.
+ */
+private fun WorkingState?.orOpen(): WorkingState = this ?: WorkingState.Open
 
 // --- Plan intents ---
 //
@@ -400,10 +447,15 @@ data class Move(val id: String, val newParentId: String?, val position: Int) : M
 data class SetDefinitionState(val id: String, val kind: ItemKind, val state: DefinitionState) : Mutation {
     override val target: String get() = "item:$id"
 
-    /** The optimistic local effect on a cached Habit/Chore/Event — **pure** and idempotent (replay-safe). */
-    fun applyTo(habit: Habit): Habit = habit.copy(definitionState = state)
-    fun applyTo(chore: Chore): Chore = chore.copy(definitionState = state)
-    fun applyTo(event: Event): Event = event.copy(definitionState = state)
+    /**
+     * The optimistic local effect — **pure** and idempotent (replay-safe).
+     *
+     * One transform since #422, where there were three: a typed overload per kind, because Habit, Chore
+     * and Event are three data classes with no supertype. The light switch is one Family member on one
+     * record now, so the overloads and the writer's per-kind store dispatch went together.
+     */
+    fun applyTo(item: Item): Item =
+        item.copy(plugins = item.plugins.loading(item.progress.copy(lifecycle = Lifecycle.Definition(state))))
 
     override fun toRequest(): OutboxRequest = patchRecurring(kind, id) { put("status", state.toWireToken()) }
 }

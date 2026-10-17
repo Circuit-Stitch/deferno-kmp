@@ -9,51 +9,49 @@ import com.circuitstitch.deferno.core.model.ItemKind
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 
 /**
  * The production [DefinitionStateSource] over the SQLDelight [DefernoDatabase] (ADR-0053 decision 4,
  * #390).
  *
- * It reads the three recurring tables **directly**, through narrow `(id, definition_state)` queries,
- * rather than composing the three per-kind local stores. The reading wants one enum per definition;
- * going through `HabitLocalStore.observeActive()` and its siblings would rebuild the whole domain
- * model — fourteen recurrence columns and a sealed `Cadence` per row — on every emission of a flow the
- * day agenda re-collects on every write to any of those tables. The queries are kind-qualified in the
- * `.sq` because SQLDelight hoists a multi-column query's row type into one shared package.
+ * It reads the item table **directly**, through a narrow `(id, kind, definition_state)` query, rather
+ * than going through [com.circuitstitch.deferno.core.data.item.ItemLocalStore]. The reading wants one
+ * enum per definition; going through the store would rebuild the whole plugin-shaped record — fourteen
+ * recurrence columns, a sealed `Cadence` and a recipe pass per row — on every emission of a flow the day
+ * agenda re-collects on every write.
  *
- * Tombstoned rows are excluded by the queries themselves, so a soft-deleted definition resolves to
- * `null` — which the resolver reads as Unknown, never as Missed. An unrecognised stored token degrades
- * to [DefinitionState.Active], the same defensive rule every other recurring decode uses
- * (`RecurringEntityCodec.kt`).
+ * It was three kind-qualified queries over three tables until #422. One table means one query, and the
+ * `kind` a [DefinitionRef] needs comes off the row rather than from which query answered.
+ *
+ * Tombstoned rows are excluded by the query itself, so a soft-deleted definition resolves to `null`,
+ * which the resolver reads as Unknown and never as Missed. A Task has no light switch at all, so its
+ * NULL `definition_state` excludes it by the same clause. An unrecognised stored token degrades to
+ * [DefinitionState.Active], the defensive rule every other decode here uses.
  */
 class SqlDelightDefinitionStateSource(
     private val db: DefernoDatabase,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : DefinitionStateSource {
 
-    override fun observeAll(): Flow<Map<DefinitionRef, DefinitionState>> = combine(
-        db.habitEntityQueries.selectHabitDefinitionStates().asFlow().mapToList(dispatcher),
-        db.choreEntityQueries.selectChoreDefinitionStates().asFlow().mapToList(dispatcher),
-        db.eventEntityQueries.selectEventDefinitionStates().asFlow().mapToList(dispatcher),
-    ) { habits, chores, events ->
-        buildMap {
-            habits.forEach { put(DefinitionRef(ItemKind.Habit, it.id), it.definition_state.toDefinitionStateOrDefault()) }
-            chores.forEach { put(DefinitionRef(ItemKind.Chore, it.id), it.definition_state.toDefinitionStateOrDefault()) }
-            events.forEach { put(DefinitionRef(ItemKind.Event, it.id), it.definition_state.toDefinitionStateOrDefault()) }
+    private val queries get() = db.itemEntityQueries
+
+    override fun observeAll(): Flow<Map<DefinitionRef, DefinitionState>> =
+        queries.selectDefinitionStates().asFlow().mapToList(dispatcher).map { rows ->
+            buildMap {
+                for (row in rows) {
+                    val kind = ItemKind.entries.firstOrNull { it.name == row.kind } ?: continue
+                    put(DefinitionRef(kind, row.id), row.definition_state.toDefinitionStateOrDefault())
+                }
+            }
         }
-    }
 
     override suspend fun get(kind: ItemKind, definitionId: String): DefinitionState? {
-        val token = when (kind) {
-            // A Task has no light switch at all — its lifecycle is a WorkingState — so there is nothing
-            // to look up rather than nothing found. Both answer `null`, and the resolver reads either as
-            // Unknown, which is the honest reading for a firing whose definition this device cannot see.
-            ItemKind.Task -> null
-            ItemKind.Habit -> db.habitEntityQueries.selectHabitDefinitionStateById(definitionId).executeAsOneOrNull()
-            ItemKind.Chore -> db.choreEntityQueries.selectChoreDefinitionStateById(definitionId).executeAsOneOrNull()
-            ItemKind.Event -> db.eventEntityQueries.selectEventDefinitionStateById(definitionId).executeAsOneOrNull()
-        }
-        return token?.toDefinitionStateOrDefault()
+        // A Task has no light switch — its lifecycle is a WorkingState — so there is nothing to look up
+        // rather than nothing found. Both answer `null`, and the resolver reads either as Unknown, which
+        // is the honest reading for a firing whose definition this device cannot see.
+        if (kind == ItemKind.Task) return null
+        val token = queries.selectDefinitionStateById(definitionId).executeAsOneOrNull() ?: return null
+        return token.toDefinitionStateOrDefault()
     }
 }

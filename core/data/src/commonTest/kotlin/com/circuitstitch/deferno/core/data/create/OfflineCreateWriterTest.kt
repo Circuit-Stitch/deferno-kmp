@@ -3,14 +3,16 @@ package com.circuitstitch.deferno.core.data.create
 import app.cash.turbine.test
 import com.circuitstitch.deferno.core.data.outbox.FakeOutboxStore
 import com.circuitstitch.deferno.core.data.outbox.OutboxMethod
-import com.circuitstitch.deferno.core.data.task.FakeTaskLocalStore
+import com.circuitstitch.deferno.core.data.item.FakeItemLocalStore
+import com.circuitstitch.deferno.core.data.item.cached
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.ChoreId
 import com.circuitstitch.deferno.core.model.DefinitionState
-import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.ItemKind
+import com.circuitstitch.deferno.core.model.plugin.Lifecycle
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.model.recipe.ParityRecipe
 import com.circuitstitch.deferno.core.network.ApiError
 import com.circuitstitch.deferno.core.network.ApiResult
 import com.circuitstitch.deferno.core.network.dto.ConvertItemPayload
@@ -39,19 +41,13 @@ class OfflineCreateWriterTest {
     private class Fixture(online: Boolean = true, private val id: String = "client-1") {
         val connectivity = FakeConnectivity(online = online)
         val converter = FakeItemConverter()
-        val taskStore = FakeTaskLocalStore()
-        val habitStore = FakeHabitLocalStore()
-        val choreStore = FakeChoreLocalStore()
-        val eventStore = FakeEventLocalStore()
+        val items = FakeItemLocalStore()
         val outbox = FakeOutboxStore()
         val pending = FakePendingCreateStore()
         val writer = OfflineCreateWriter(
             connectivity = connectivity,
             converter = converter,
-            taskStore = taskStore,
-            habitStore = habitStore,
-            choreStore = choreStore,
-            eventStore = eventStore,
+            items = items,
             outbox = outbox,
             pendingCreateStore = pending,
             newId = { id },
@@ -64,7 +60,7 @@ class OfflineCreateWriterTest {
     fun offlineCreateTaskInsertsLocalRowUnderClientIdAndEnqueuesOneCreate() = runTest {
         val f = Fixture(online = false)
 
-        f.taskStore.observeActive().test {
+        f.items.observeActive().test {
             assertTrue(awaitItem().isEmpty())
 
             val result = f.writer.createTask(CreateTaskPayload(title = "buy milk", description = "2%"))
@@ -73,8 +69,8 @@ class OfflineCreateWriterTest {
             assertEquals(CreateResult.Created(ItemKind.Task, "client-1"), result)
             // The row appears via the local Flow immediately, under the client-generated id.
             val emitted = awaitItem()
-            assertEquals(listOf(TaskId("client-1")), emitted.map { it.id })
-            assertEquals("buy milk", emitted.single().title)
+            assertEquals(listOf("client-1"), emitted.map { it.id })
+            assertEquals("buy milk", emitted.single().item.core.title)
             cancelAndIgnoreRemainingEvents()
         }
 
@@ -101,7 +97,11 @@ class OfflineCreateWriterTest {
         val result = f.writer.createHabit(CreateHabitPayload(title = "stretch", recurrence = RecurrenceDto("daily")))
 
         assertEquals(CreateResult.Created(ItemKind.Habit, "h-1"), result)
-        assertEquals(DefinitionState.Active, f.habitStore.all.getValue(HabitId("h-1")).definitionState)
+        assertEquals(
+            Lifecycle.Definition(DefinitionState.Active),
+            f.items.all.getValue("h-1").item.progress.lifecycle,
+        )
+        assertEquals(ItemKind.Habit, f.items.all.getValue("h-1").kind)
         assertEquals("create:Habit:h-1", f.outbox.all.single().target)
         assertEquals(ItemKind.Habit, f.pending.all.single().itemKind)
     }
@@ -124,7 +124,7 @@ class OfflineCreateWriterTest {
     @Test
     fun convertOfflineReturnsOfflineAndTouchesNothing() = runTest {
         val f = Fixture(online = false)
-        f.taskStore.upsert(task("item-1"))
+        f.items.upsert(task("item-1").cached())
 
         val result = f.writer.convert("item-1", fromKind = ItemKind.Task, ConvertItemPayload(to = "chore"))
 
@@ -135,20 +135,25 @@ class OfflineCreateWriterTest {
     @Test
     fun convertOnlineReconcilesTheCache() = runTest {
         val f = Fixture(online = true)
-        f.taskStore.upsert(task("item-1"))
+        f.items.upsert(task("item-1").cached())
         f.converter.convertResult = ApiResult.Success(ConvertedItem.AsChore(chore("item-1")))
 
         val result = f.writer.convert("item-1", fromKind = ItemKind.Task, ConvertItemPayload(to = "chore", recurrence = RecurrenceDto("weekly")))
 
         assertEquals(CreateResult.Created(ItemKind.Chore, "item-1"), result)
-        assertTrue(f.taskStore.all.isEmpty(), "the pre-convert Task row must be removed")
-        assertEquals(chore("item-1"), f.choreStore.all[ChoreId("item-1")])
+        // An upsert in place, not a delete plus an insert (#422). A convert was a row moving between two
+        // tables while the cache held four; one cache keyed by id makes it the plugin swap ADR-0055
+        // describes, where content, labels and modality never move.
+        assertEquals(1, f.items.all.size, "the converted row keeps its id and its slot")
+        val converted = f.items.all.getValue("item-1")
+        assertEquals(ItemKind.Chore, converted.kind)
+        assertEquals(chore("item-1"), ParityRecipe.writeChore(converted.item))
     }
 
     @Test
     fun convertServerRejectionSurfacesAsFailed() = runTest {
         val f = Fixture(online = true)
-        f.taskStore.upsert(task("item-1"))
+        f.items.upsert(task("item-1").cached())
         f.converter.convertResult = ApiResult.Failure(ApiError.Endpoint(status = 422, code = "invalid", message = "nope"))
 
         val result = f.writer.convert("item-1", fromKind = ItemKind.Task, ConvertItemPayload(to = "chore"))

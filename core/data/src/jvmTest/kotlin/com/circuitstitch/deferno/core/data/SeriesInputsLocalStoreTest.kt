@@ -1,9 +1,11 @@
 package com.circuitstitch.deferno.core.data
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
-import com.circuitstitch.deferno.core.data.chore.SqlDelightChoreLocalStore
-import com.circuitstitch.deferno.core.data.event.SqlDelightEventLocalStore
-import com.circuitstitch.deferno.core.data.habit.SqlDelightHabitLocalStore
+import app.cash.turbine.test
+import com.circuitstitch.deferno.core.data.item.ItemLocalStore
+import com.circuitstitch.deferno.core.data.item.SqlDelightItemLocalStore
+import com.circuitstitch.deferno.core.data.item.asKindRow
+import com.circuitstitch.deferno.core.data.item.cached
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
 import com.circuitstitch.deferno.core.model.Cadence
 import com.circuitstitch.deferno.core.model.Chore
@@ -18,6 +20,7 @@ import com.circuitstitch.deferno.core.model.Recurrence
 import com.circuitstitch.deferno.core.model.SeriesInputs
 import com.circuitstitch.deferno.core.model.SeriesOverride
 import com.circuitstitch.deferno.core.model.expandOccurrenceGrid
+import com.circuitstitch.deferno.core.model.recipe.KindRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
@@ -39,9 +42,13 @@ import kotlin.time.Instant
  * out of a cold cache and gets real firing dates back with no network anywhere in the picture. Everything
  * above it exists to make that one honest.
  *
- * Sibling of `RecurringLocalStoreTest`, and deliberately separate: these inputs live in their own
- * kind-neutral tables (`seriesInputsEntity` + `seriesOverrideEntity`), not in the three definition rows,
- * so what is under test is the *stitch* — two tables joined back onto a definition on the way out.
+ * Sibling of `SqlDelightItemLocalStoreTest`, and deliberately separate: these inputs live in their own
+ * tables (`seriesInputsEntity` + `seriesOverrideEntity`), not in the item row, so what is under test is
+ * the *stitch* — two tables joined back onto a definition on the way out.
+ *
+ * **Both tables are keyed on the item id alone since #422.** They were keyed `(kind, definition_id)`,
+ * which was the same discriminator the four item tables carried; `SeriesInputs` names no kind, so
+ * nothing above the store noticed it go.
  */
 class SeriesInputsLocalStoreTest {
 
@@ -50,6 +57,9 @@ class SeriesInputsLocalStoreTest {
     private fun db() = DefernoDatabase(
         JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY).also { DefernoDatabase.Schema.create(it) },
     )
+
+    private fun newStore(database: DefernoDatabase = db()) =
+        SqlDelightItemLocalStore(database, Dispatchers.Default)
 
     /**
      * The full-fat block: a Segment bound, several exdates, and several overrides of which one only
@@ -73,8 +83,8 @@ class SeriesInputsLocalStoreTest {
         ),
     )
 
-    private fun chore(series: SeriesInputs?) = Chore(
-        id = ChoreId("c-1"),
+    private fun chore(series: SeriesInputs?, id: String = "c-1") = Chore(
+        id = ChoreId(id),
         orgSlug = "u-e4h2qk",
         title = "water the plants",
         definitionState = DefinitionState.Active,
@@ -84,96 +94,129 @@ class SeriesInputsLocalStoreTest {
         series = series,
     )
 
+    /** The stored row's own series inputs, read back through the store's stitch. */
+    private suspend fun ItemLocalStore.seriesOf(id: String): SeriesInputs? =
+        when (val row = get(id)?.asKindRow()) {
+            is KindRow.OfHabit -> row.habit.series
+            is KindRow.OfChore -> row.chore.series
+            is KindRow.OfEvent -> row.event.series
+            else -> null
+        }
+
     @Test
     fun aSeriesWithExdatesAndOverridesSurvivesTheCacheRoundTrip() = runTest {
-        val store = SqlDelightChoreLocalStore(db(), Dispatchers.Default)
-        store.upsert(chore(richSeries))
+        val store = newStore()
+        store.upsert(chore(richSeries).cached())
 
         // Equality on the whole data class, not field-by-field: a new field added to SeriesInputs and
         // forgotten in the codec fails here rather than being silently dropped for a release.
-        assertEquals(richSeries, store.get(ChoreId("c-1"))?.series)
+        assertEquals(richSeries, store.seriesOf("c-1"))
     }
 
     @Test
     fun overridesComeBackAscendingBySlotEvenWhenWrittenOutOfOrder() = runTest {
-        val store = SqlDelightChoreLocalStore(db(), Dispatchers.Default)
+        val store = newStore()
         // The wire guarantees ascending order; the cache must not be the thing that breaks it, and a
         // child table has no inherent order at all. `ORDER BY recurrence_id` restores it — which works
         // only because the column holds an ISO wall time, where lexicographic IS chronological.
         val shuffled = richSeries.copy(overrides = richSeries.overrides.reversed())
-        store.upsert(chore(shuffled))
+        store.upsert(chore(shuffled).cached())
 
         assertEquals(
             listOf(
                 LocalDateTime.parse("2026-08-11T23:59:59"),
                 LocalDateTime.parse("2026-08-25T23:59:59"),
             ),
-            store.get(ChoreId("c-1"))?.series?.overrides?.map { it.recurrenceId },
+            store.seriesOf("c-1")?.overrides?.map { it.recurrenceId },
         )
     }
 
     @Test
     fun anAbsentBlockStaysAbsentAndIsNotAnEmptyOne() = runTest {
-        val store = SqlDelightChoreLocalStore(db(), Dispatchers.Default)
-        store.upsert(chore(null))
+        val store = newStore()
+        store.upsert(chore(null).cached())
 
         // The distinction the whole nullable type exists for. `null` is the backend's elision — "this
         // device cannot reproduce that grid" — and must never decode as `SeriesInputs(exdates = [])`,
         // which claims the opposite: a grid that is fully known and has no exclusions.
-        assertNull(store.get(ChoreId("c-1"))?.series)
+        assertNull(store.seriesOf("c-1"))
     }
 
     @Test
     fun aBlockThatGoesAwayTakesItsOverridesWithIt() = runTest {
-        val store = SqlDelightChoreLocalStore(db(), Dispatchers.Default)
-        store.upsert(chore(richSeries))
-        store.upsert(chore(null))
+        val store = newStore()
+        store.upsert(chore(richSeries).cached())
+        store.upsert(chore(null).cached())
 
         // Clear-then-seed, including on the clear: an override left behind would haunt a grid whose
         // series no longer exists, and a parent row deleted without its children would resurrect them
         // the next time the same definition got a block.
-        assertNull(store.get(ChoreId("c-1"))?.series)
-        store.upsert(chore(richSeries.copy(overrides = emptyList())))
-        assertEquals(emptyList(), store.get(ChoreId("c-1"))?.series?.overrides)
+        assertNull(store.seriesOf("c-1"))
+        store.upsert(chore(richSeries.copy(overrides = emptyList())).cached())
+        assertEquals(emptyList(), store.seriesOf("c-1")?.overrides)
     }
 
+    /**
+     * The key is the item id alone (#422). It was `(kind, definition_id)`, so three definitions of
+     * different kinds sharing an id kept separate rows; an item id is unique across kinds, so the kind
+     * was carrying no information the id did not already have — and now that one cache holds every kind,
+     * two rows *cannot* share an id.
+     */
     @Test
-    fun eachKindGetsItsOwnRowsUnderTheSharedTables() = runTest {
-        // The tables are kind-neutral, so `kind` is the only thing keeping three definitions that happen
-        // to share an id apart. Ids collide in practice far less than this, but the key is the contract.
-        val database = db()
-        val habits = SqlDelightHabitLocalStore(database, Dispatchers.Default)
-        val events = SqlDelightEventLocalStore(database, Dispatchers.Default)
-        val chores = SqlDelightChoreLocalStore(database, Dispatchers.Default)
-
+    fun eachItemGetsItsOwnRowsUnderTheSharedTables() = runTest {
+        val store = newStore()
         val habitSeries = richSeries.copy(tzid = "Europe/Berlin", overrides = emptyList())
-        habits.upsert(
+
+        store.upsert(
             Habit(
-                id = HabitId("shared-id"),
+                id = HabitId("h-1"),
                 orgSlug = "u-e4h2qk",
                 title = "stretch",
                 definitionState = DefinitionState.Active,
                 recurrence = Recurrence(Cadence.Daily),
                 dateCreated = created,
                 series = habitSeries,
-            ),
+            ).cached(),
         )
-        chores.upsert(chore(richSeries).copy(id = ChoreId("shared-id")))
-        events.upsert(
+        store.upsert(chore(richSeries, id = "c-1").cached())
+        store.upsert(
             Event(
-                id = EventId("shared-id"),
+                id = EventId("e-1"),
                 orgSlug = "u-e4h2qk",
                 title = "standup",
                 definitionState = DefinitionState.Active,
                 recurrence = Recurrence(Cadence.Daily),
                 dateCreated = created,
                 series = null,
-            ),
+            ).cached(),
         )
 
-        assertEquals(habitSeries, habits.get(HabitId("shared-id"))?.series)
-        assertEquals(richSeries, chores.get(ChoreId("shared-id"))?.series)
-        assertNull(events.get(EventId("shared-id"))?.series)
+        assertEquals(habitSeries, store.seriesOf("h-1"))
+        assertEquals(richSeries, store.seriesOf("c-1"))
+        assertNull(store.seriesOf("e-1"))
+    }
+
+    /**
+     * The item row and its inputs commit in **one** transaction, which is why the list read can stitch
+     * them inline instead of combining two observed `Flow`s. Two independently-observed tables race:
+     * `mapToList` re-queries off the notification asynchronously, so an upsert would momentarily emit
+     * the new series map beside the old item list and a freshly created row would flicker out of the
+     * tree. A single commit-time emission carrying the row *with* its grid is the property.
+     */
+    @Test
+    fun theRowAndItsInputsArriveTogetherInOneEmission() = runTest {
+        val store = newStore()
+
+        store.observeActive().test {
+            assertTrue(awaitItem().isEmpty())
+
+            store.upsert(chore(richSeries).cached())
+
+            val emitted = awaitItem().single()
+            assertEquals("c-1", emitted.id)
+            assertEquals(richSeries, emitted.item.repeats.series)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     /**
@@ -186,10 +229,10 @@ class SeriesInputsLocalStoreTest {
      */
     @Test
     fun aCachedDefinitionExpandsToRealFiringDatesWithNoNetwork() = runTest {
-        val store = SqlDelightChoreLocalStore(db(), Dispatchers.Default)
-        store.upsert(chore(richSeries))
+        val store = newStore()
+        store.upsert(chore(richSeries).cached())
 
-        val cached = assertNotNullChore(store.get(ChoreId("c-1")))
+        val cached = assertIs<KindRow.OfChore>(store.get("c-1")?.asKindRow()).chore
         val expansion = expandOccurrenceGrid(
             recurrence = requireNotNull(cached.recurrence),
             series = requireNotNull(cached.series),
@@ -211,6 +254,4 @@ class SeriesInputsLocalStoreTest {
         assertEquals(LocalDateTime.parse("2026-08-25T23:59:59"), moved.recurrenceId)
         assertEquals(LocalDateTime.parse("2026-08-26T18:30:00"), moved.startLocal)
     }
-
-    private fun assertNotNullChore(chore: Chore?): Chore = requireNotNull(chore) { "not cached" }
 }

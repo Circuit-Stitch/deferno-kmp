@@ -1,9 +1,8 @@
 package com.circuitstitch.deferno.core.data.backup
 
-import com.circuitstitch.deferno.core.data.create.FakeChoreLocalStore
-import com.circuitstitch.deferno.core.data.create.FakeEventLocalStore
-import com.circuitstitch.deferno.core.data.create.FakeHabitLocalStore
-import com.circuitstitch.deferno.core.data.task.FakeTaskLocalStore
+import com.circuitstitch.deferno.core.data.item.FakeItemLocalStore
+import com.circuitstitch.deferno.core.data.item.cacheOf
+import com.circuitstitch.deferno.core.data.item.cached
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
@@ -28,9 +27,9 @@ class BackupZipJvmTest {
     @Test
     fun zip_is_readable_by_java_util_zip_and_items_json_matches() = runTest {
         val exporter = BackupExporter(
-            taskStore = FakeTaskLocalStore(
-                mapOf(
-                    TaskId("t1") to Task(
+            FakeItemLocalStore(
+                cacheOf(
+                    Task(
                         id = TaskId("t1"),
                         orgSlug = "u-e4h2qk",
                         title = "Buy milk",
@@ -38,12 +37,9 @@ class BackupZipJvmTest {
                         dateCreated = Instant.parse("2026-05-20T16:11:42Z"),
                         hydration = HydrationState.Full,
                         description = "skim",
-                    ),
+                    ).cached(),
                 ),
             ),
-            habitStore = FakeHabitLocalStore(),
-            choreStore = FakeChoreLocalStore(),
-            eventStore = FakeEventLocalStore(),
         )
 
         val expectedItemsJson = exporter.buildItemsJson()

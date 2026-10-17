@@ -1,0 +1,149 @@
+-- Migration 22 -> 23: the flip. The plugin list becomes the cached truth (#422, ADR-0055).
+--
+-- **This migration is destructive, and that is the decision rather than an accident.** ADR-0055 states
+-- it: the four per-kind tables are replaced rather than reshaped, and nothing carries forward. The
+-- columns below are a superset of the four old tables', so an `INSERT … SELECT` carry-forward could
+-- have been written. It deliberately is not. The app ships to nobody, the data in question is the
+-- developer's own dogfood data, and ADR-0034 and the wider pre-launch posture have consistently
+-- declined to build carry-forward machinery for it.
+--
+-- **The versioned-migration mechanism stays intact. Only the data goes.** This is a numbered `.sqm`
+-- with a frozen snapshot beside it, like every migration before it, so `verifyMigration` still proves
+-- that `1.db` plus the chain reproduces the `.sq` schema. What ADR-0022 exists to prevent is an
+-- unversioned in-place schema edit, and this is not one.
+--
+-- Never edit a released migration or snapshot — ADR-0022 runbook.
+
+-- ── The four kind-shaped item tables become one ────────────────────────────────────────────────────
+--
+-- Their indexes are dropped with them; SQLite drops a table's indexes automatically.
+DROP TABLE taskEntity;
+DROP TABLE habitEntity;
+DROP TABLE choreEntity;
+DROP TABLE eventEntity;
+
+-- The union of those four, declared once, plus the `kind` discriminator. See `ItemEntity.sq` for why
+-- the kind is stored rather than derived and why the columns stay wire-shaped rather than holding an
+-- encoded plugin list.
+CREATE TABLE itemEntity (
+    id                    TEXT NOT NULL PRIMARY KEY,
+    kind                  TEXT NOT NULL,
+    org_slug              TEXT NOT NULL,
+    owner_org_id          TEXT,
+    ref                   TEXT,
+    sequence              INTEGER,
+    title                 TEXT NOT NULL,
+    parent_id             TEXT,
+    date_created          TEXT NOT NULL,
+    deleted_at            TEXT,
+    hydration_state       TEXT NOT NULL,
+    description           TEXT,
+    labels                TEXT NOT NULL DEFAULT '',
+    complete_by           TEXT,
+    target_date           TEXT,
+    priority              TEXT,
+    pinned                INTEGER NOT NULL DEFAULT 0,
+    blocked               INTEGER,
+    is_blocker            INTEGER,
+    deadline_time_of_day  TEXT,
+    working_state         TEXT,
+    finished_at           TEXT,
+    child_ids             TEXT NOT NULL DEFAULT '',
+    descendant_done       INTEGER,
+    descendant_total      INTEGER,
+    blocked_by            TEXT,
+    next_task_id          TEXT,
+    productive            REAL,
+    desire                REAL,
+    external_source       TEXT,
+    external_id           TEXT,
+    external_url          TEXT,
+    attachment_count      INTEGER,
+    attachment_total_size INTEGER,
+    definition_state          TEXT,
+    series_id                 TEXT,
+    recurrence_type           TEXT,
+    recurrence_days           TEXT NOT NULL DEFAULT '',
+    recurrence_interval       INTEGER,
+    recurrence_anchor_type    TEXT,
+    recurrence_anchor_day     INTEGER,
+    recurrence_anchor_nth     INTEGER,
+    recurrence_anchor_weekday TEXT,
+    recurrence_month          INTEGER,
+    recurrence_day            INTEGER,
+    recurrence_rrule          TEXT,
+    recurrence_end_type       TEXT,
+    recurrence_end_date       TEXT,
+    recurrence_end_count      INTEGER,
+    recurrence_raw_type       TEXT,
+    cadence_mode          TEXT,
+    all_day               INTEGER NOT NULL DEFAULT 0,
+    end_time              TEXT,
+    start_time_of_day     TEXT,
+    end_time_of_day       TEXT
+);
+
+CREATE INDEX itemEntity_kind ON itemEntity(kind);
+CREATE INDEX itemEntity_owner_org_id ON itemEntity(owner_org_id);
+CREATE INDEX itemEntity_parent_id ON itemEntity(parent_id);
+CREATE INDEX itemEntity_deleted_at ON itemEntity(deleted_at);
+CREATE INDEX itemEntity_working_state ON itemEntity(working_state);
+
+-- ── The kind leaves the two series tables ──────────────────────────────────────────────────────────
+--
+-- Both were keyed on `(kind, definition_id)` and are now keyed on the item id alone, which is the key
+-- an Occurrence carries. A primary key cannot be narrowed in place in SQLite, so each is dropped and
+-- recreated; they hold only cached server state, so there is nothing here that the outbox does not
+-- already hold the unsent half of.
+--
+-- `occurrenceFactEntity` and `occurrenceCoverageEntity` keep their `kind` column, and that is
+-- deliberate. The domain records they decode into — `OccurrenceFact` and `OccurrenceCoverage` — carry
+-- the kind as a field, and the readings over them dispatch on it: `bucketFact` routes by kind and
+-- coverage is merged per kind. Those readings are kind-shaped by design until Phase 4 re-expresses them
+-- over the anchor, which is what ADR-0056's #436 amendment describes ("an appointment cannot be late"
+-- is a claim about the anchor, and it outlives the kind that enforces it today). Re-keying the storage
+-- ahead of the reading would only move the kind into a join.
+DROP TABLE seriesInputsEntity;
+
+CREATE TABLE seriesInputsEntity (
+    item_id      TEXT NOT NULL PRIMARY KEY,
+    anchor_local TEXT NOT NULL,
+    tzid         TEXT NOT NULL,
+    until_utc    TEXT,
+    exdates      TEXT NOT NULL DEFAULT ''
+);
+
+DROP TABLE seriesOverrideEntity;
+
+CREATE TABLE seriesOverrideEntity (
+    item_id        TEXT NOT NULL,
+    recurrence_id  TEXT NOT NULL,
+    is_cancelled   INTEGER NOT NULL DEFAULT 0,
+    moved_to_local TEXT,
+    PRIMARY KEY (item_id, recurrence_id)
+);
+
+-- ── The caches that point at item rows are emptied with them ───────────────────────────────────────
+--
+-- Their schemas are unchanged, so these are deletes rather than drops. Each holds server state keyed on
+-- an item id, and leaving them full would mean a first launch that renders a plan, a calendar, a
+-- comment thread and a history strip for items the cache no longer holds. The next refresh repopulates
+-- them.
+DELETE FROM dailyPlanEntry;
+DELETE FROM calendarItemEntity;
+DELETE FROM commentEntity;
+DELETE FROM itemHistoryEntry;
+DELETE FROM occurrenceFactEntity;
+DELETE FROM occurrenceCoverageEntity;
+
+-- ── What is deliberately left alone ────────────────────────────────────────────────────────────────
+--
+-- `outboxEntry` and `pendingItemCreate` hold writes a person made that the server has not accepted yet.
+-- They are unsent local intent, not a cache, and ADR-0057 refuses to silently destroy what a person
+-- recorded. A pending mutation whose target row is momentarily absent still replays: the writers skip
+-- the optimistic apply when the row is not cached and enqueue regardless, and the reconcile after
+-- replay materialises server truth.
+--
+-- `userSettingsEntity`, `brainDumpDraftEntity`, `conversationEntity`, `conversationMessageEntity`,
+-- `localAttachmentEntity`, `activityLedgerEntry` and `activitySyncState` reference no item cache row
+-- for their own validity, so they are untouched too.

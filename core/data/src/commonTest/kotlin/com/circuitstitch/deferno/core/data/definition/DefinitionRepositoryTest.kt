@@ -2,13 +2,10 @@ package com.circuitstitch.deferno.core.data.definition
 
 import app.cash.turbine.test
 import com.circuitstitch.deferno.core.data.RemoteSnapshot
-import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
-import com.circuitstitch.deferno.core.data.create.FakeChoreLocalStore
-import com.circuitstitch.deferno.core.data.create.FakeEventLocalStore
-import com.circuitstitch.deferno.core.data.create.FakeHabitLocalStore
-import com.circuitstitch.deferno.core.data.event.EventLocalStore
-import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
+import com.circuitstitch.deferno.core.data.item.CachedItem
+import com.circuitstitch.deferno.core.data.item.FakeItemLocalStore
 import com.circuitstitch.deferno.core.data.item.ItemDetailRead
+import com.circuitstitch.deferno.core.data.item.cached
 import com.circuitstitch.deferno.core.data.item.ItemDetailRemoteSource
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceCoverageLocalStore
 import com.circuitstitch.deferno.core.data.occurrence.OccurrenceFactLocalStore
@@ -21,7 +18,11 @@ import com.circuitstitch.deferno.core.model.OccurrenceCoverage
 import com.circuitstitch.deferno.core.model.OccurrenceFact
 import com.circuitstitch.deferno.core.model.OccurrenceResolution
 import com.circuitstitch.deferno.core.model.SeriesChain
+import com.circuitstitch.deferno.core.model.Task
+import com.circuitstitch.deferno.core.model.TaskId
+import com.circuitstitch.deferno.core.model.WorkingState
 import com.circuitstitch.deferno.core.model.mergeCoverage
+import com.circuitstitch.deferno.core.model.recipe.ParityRecipe
 import com.circuitstitch.deferno.core.model.toDefinition
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -62,12 +63,10 @@ class DefinitionRepositoryTest {
     )
 
     private class Fixture(
-        habitRows: Map<HabitId, Habit> = emptyMap(),
+        rows: List<CachedItem> = emptyList(),
         val read: ItemDetailRead? = null,
     ) {
-        val habits = FakeHabitLocalStore(habitRows)
-        val chores = FakeChoreLocalStore()
-        val events = FakeEventLocalStore()
+        val items = FakeItemLocalStore(rows.associateBy { it.id })
         val facts = RecordingFactStore()
         val coverage = RecordingCoverageStore()
         val remote = object : ItemDetailRemoteSource {
@@ -77,12 +76,15 @@ class DefinitionRepositoryTest {
                 return read?.let { RemoteSnapshot.Available(it) } ?: RemoteSnapshot.Unavailable
             }
         }
-        val repository = OfflineDefinitionRepository(habits, chores, events, remote, facts, coverage)
+        val repository = OfflineDefinitionRepository(items, remote, facts, coverage)
+
+        /** The cached row for [id] read back as the Habit it round-trips to. */
+        suspend fun habit(id: String): Habit? = items.get(id)?.let { ParityRecipe.writeHabit(it.item) }
     }
 
     @Test
     fun observeProjectsTheCachedHabitToTheKindNeutralDefinition() = runTest {
-        val f = Fixture(mapOf(HabitId("h") to habit()))
+        val f = Fixture(listOf(habit().cached()))
 
         f.repository.observe(ref).test {
             assertEquals(habit().toDefinition(), awaitItem())
@@ -103,11 +105,34 @@ class DefinitionRepositoryTest {
      * generic [ItemRef] honest without making every call site pre-check the kind.
      */
     @Test
-    fun observeEmitsNullForATaskRefWithoutTouchingAnyStore() = runTest {
-        val f = Fixture(mapOf(HabitId("h") to habit()))
+    fun observeEmitsNullWhenTheCachedRowIsATask() = runTest {
+        val task = Task(
+            id = TaskId("t"),
+            orgSlug = "u-e4h2qk",
+            title = "not a definition",
+            workingState = WorkingState.Open,
+            dateCreated = Instant.parse("2026-01-01T00:00:00Z"),
+        )
+        val f = Fixture(listOf(task.cached()))
 
-        f.repository.observe(ItemRef("h", ItemKind.Task)).test {
+        f.repository.observe(ItemRef("t", ItemKind.Task)).test {
             assertNull(awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /**
+     * **The ref's own kind is no longer consulted (#422).** The read fanned out over three per-kind
+     * stores, so a ref carrying a stale kind — one the server has since converted — queried the wrong
+     * table and read `null` while the row sat cached. It resolves by id now, and the stored row is what
+     * says whether this is a definition.
+     */
+    @Test
+    fun observeResolvesOnTheIdEvenWhenTheRefsKindIsStale() = runTest {
+        val f = Fixture(listOf(habit().cached()))
+
+        f.repository.observe(ItemRef("h", ItemKind.Chore)).test {
+            assertEquals("walk", awaitItem()?.title)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -119,7 +144,7 @@ class DefinitionRepositoryTest {
     @Test
     fun hydrateLandsARealRecordAsAFactAndRecordsCoverage() = runTest {
         val f = Fixture(
-            habitRows = mapOf(HabitId("h") to habit()),
+            rows = listOf(habit().cached()),
             read = ItemDetailRead(
                 habit = habit(),
                 todayFact = OccurrenceFact(ItemKind.Habit, "h", today, OccurrenceResolution.DoneOnTime),
@@ -146,7 +171,7 @@ class DefinitionRepositoryTest {
     @Test
     fun hydrateRecordsCoverageButNoFactForThePlaceholderAnswer() = runTest {
         val f = Fixture(
-            habitRows = mapOf(HabitId("h") to habit()),
+            rows = listOf(habit().cached()),
             read = ItemDetailRead(
                 habit = habit(),
                 todayFact = null,
@@ -174,7 +199,7 @@ class DefinitionRepositoryTest {
     fun hydrateRecordsCoverageAtTheServersDateNotTheDevicesToday() = runTest {
         val serverDay = LocalDate(2026, 6, 16) // the account's zone is already on the next day
         val f = Fixture(
-            habitRows = mapOf(HabitId("h") to habit()),
+            rows = listOf(habit().cached()),
             read = ItemDetailRead(habit = habit(), answeredForDate = serverDay),
         )
 
@@ -189,7 +214,7 @@ class DefinitionRepositoryTest {
     @Test
     fun hydrateRecordsNoCoverageWhenTheServerAnsweredForNoDay() = runTest {
         val f = Fixture(
-            habitRows = mapOf(HabitId("h") to habit()),
+            rows = listOf(habit().cached()),
             read = ItemDetailRead(habit = habit(), answeredForDate = null),
         )
 
@@ -201,7 +226,7 @@ class DefinitionRepositoryTest {
     /** Offline: nothing is written, nothing is claimed, and the cached row still reads. */
     @Test
     fun hydrateWritesNothingWhenTheNetworkIsGone() = runTest {
-        val f = Fixture(habitRows = mapOf(HabitId("h") to habit()), read = null)
+        val f = Fixture(rows = listOf(habit().cached()), read = null)
 
         val extras = f.repository.hydrate(ref)
 
@@ -219,7 +244,7 @@ class DefinitionRepositoryTest {
     fun hydrateReturnsTheChainAndOriginLabelWithoutCachingThem() = runTest {
         val chain = SeriesChain(head = "h", requested = "h", segments = emptyList(), truncated = true)
         val f = Fixture(
-            habitRows = mapOf(HabitId("h") to habit()),
+            rows = listOf(habit().cached()),
             read = ItemDetailRead(habit = habit(), chain = chain, originLabel = "acme/repo#4"),
         )
 
@@ -233,13 +258,13 @@ class DefinitionRepositoryTest {
     @Test
     fun hydrateReplacesTheStaleCachedRow() = runTest {
         val f = Fixture(
-            habitRows = mapOf(HabitId("h") to habit(title = "stale")),
+            rows = listOf(habit(title = "stale").cached()),
             read = ItemDetailRead(habit = habit(title = "fresh")),
         )
 
         f.repository.hydrate(ref)
 
-        assertEquals("fresh", f.habits.get(HabitId("h"))?.title)
+        assertEquals("fresh", f.habit("h")?.title)
     }
 
     /**
@@ -254,11 +279,11 @@ class DefinitionRepositoryTest {
      */
     @Test
     fun hydrateLandsADefinitionThisDeviceHasNeverCached() = runTest {
-        val f = Fixture(habitRows = emptyMap(), read = ItemDetailRead(habit = habit(title = "first sight")))
+        val f = Fixture(rows = emptyList(), read = ItemDetailRead(habit = habit(title = "first sight")))
 
         f.repository.hydrate(ref)
 
-        val row = assertNotNull(f.habits.get(HabitId("h")), "the detail read must land an uncached row")
+        val row = assertNotNull(f.habit("h"), "the detail read must land an uncached row")
         assertEquals("first sight", row.title)
         assertEquals("u-e4h2qk", row.orgSlug, "including the columns the projection would have lost")
         f.repository.observe(ref).test {

@@ -1,47 +1,40 @@
 package com.circuitstitch.deferno.core.data.create
 
-import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
-import com.circuitstitch.deferno.core.data.event.EventLocalStore
-import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
+import com.circuitstitch.deferno.core.data.item.CachedItem
+import com.circuitstitch.deferno.core.data.item.ItemLocalStore
 import com.circuitstitch.deferno.core.data.outbox.OutboxStore
 import com.circuitstitch.deferno.core.data.outbox.repointId
 import com.circuitstitch.deferno.core.data.plan.PlanLocalStore
-import com.circuitstitch.deferno.core.data.task.TaskLocalStore
-import com.circuitstitch.deferno.core.model.ChoreId
-import com.circuitstitch.deferno.core.model.EventId
-import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.ItemKind
-import com.circuitstitch.deferno.core.model.TaskId
 
 /**
  * Repairs every local reference to an offline-created Item's **client** id when the server assigns it a
- * **different** canonical id (#185). Client-supplied ids are the normal path (the backend honors them —
- * Circuit-Stitch/Deferno#402), so this fires only on the rare divergence, but it must leave the cache
- * fully consistent when it does. Driven by the outbox replay listener the instant a create replays
- * (before the processor advances to any queued edit against the same id).
+ * **different** canonical id (#185). Client-supplied ids are the normal path — the backend honors them —
+ * so this fires only on the rare divergence, but it must leave the cache fully consistent when it does.
+ * The outbox replay listener drives it the instant a create replays, before the processor advances to any
+ * queued edit against the same id.
  *
- * What it re-points (client → canonical):
- * - the Item row itself in its kind's local store (insert under the canonical id, delete the client row);
- * - **Task only** — `parentId` / `children` references on every other Task row (the decomposition tree);
- * - **every kind** — plan slots referencing the id ([PlanLocalStore.rekeyItem]);
- * - **Task only** — on-device attachment rows keyed by the id ([rekeyAttachments], gh#223): a brain-dump
- *   recording attached at accept time is keyed by the create-time client id, so without this it would be
- *   orphaned (`forTask(canonicalId)` finds nothing) the moment the Task moves to the server id;
- * - any already-queued outbox entry whose `target` / `path` / `body` mentions the client id
+ * What it re-points, from client id to canonical id:
+ *
+ * - the item row itself, inserted under the canonical id and deleted under the client one;
+ * - the tree edges on every other cached row — `parentId` and `childIds`;
+ * - plan slots referencing the id ([PlanLocalStore.rekeyItem]);
+ * - on-device attachment rows keyed by the id ([rekeyAttachments], gh#223), which are Task-only: a
+ *   brain-dump recording attached at accept time is keyed by the create-time client id, so without this
+ *   it is orphaned the moment the Task moves to the server id;
+ * - any already-queued outbox entry whose `target`, `path` or `body` mentions the client id
  *   ([OutboxStore.update], in place so FIFO order is preserved). A UUID substring replace is
- *   collision-safe (ids don't appear as substrings of unrelated content).
+ *   collision-safe, since ids do not appear as substrings of unrelated content.
  *
- * The recurring kinds (Habit/Chore/Event) are recurring *definitions* — not parents/children of each
- * other — so healing one is the row re-key, the plan sweep and the outbox sweep. The plan sweep stopped
- * being Task-only in #385, when the daily plan became kind-neutral: a recurring definition can be
- * planned, so it can hold a plan slot pointing at a dead client id exactly as a Task can. The
- * pending-create row's own re-key + confirm is owned by the listener, not here.
+ * **The tree sweep stopped being Task-only at #422.** It ran over the Task store alone while the cache
+ * held four tables, because only that store could be walked in one pass. The forest has always nested a
+ * child of any kind under a parent of any kind, so a recurring definition parented to an offline-created
+ * Task kept a dead `parentId` through the heal. One cache means one sweep and the gap closes with it.
+ *
+ * The pending-create row's own re-key and confirm is owned by the listener, not here.
  */
 class ItemIdHealer(
-    private val taskStore: TaskLocalStore,
-    private val habitStore: HabitLocalStore,
-    private val choreStore: ChoreLocalStore,
-    private val eventStore: EventLocalStore,
+    private val items: ItemLocalStore,
     private val planStore: PlanLocalStore,
     private val outbox: OutboxStore,
     // gh#223: re-point on-device attachments (Task-only) from the client id to the canonical id. A
@@ -52,64 +45,56 @@ class ItemIdHealer(
 ) {
 
     /**
-     * Re-points all local references for the [kind] Item from [clientId] to [canonicalId]. A no-op
-     * returning `false` when the ids are equal (the normal path); otherwise performs the heal and
-     * returns `true` (the processor uses this to know the outbox queue may have changed).
+     * Re-points all local references for the item from [clientId] to [canonicalId]. A no-op returning
+     * `false` when the ids are equal, which is the normal path; otherwise performs the heal and returns
+     * `true`, which the processor uses to know the outbox queue may have changed.
+     *
+     * [kind] selects the attachment sweep and nothing else. The row itself is found by id.
      */
     suspend fun heal(clientId: String, canonicalId: String, kind: ItemKind): Boolean {
         if (clientId == canonicalId) return false
-        when (kind) {
-            ItemKind.Task -> healTask(clientId, canonicalId)
-            ItemKind.Habit -> healHabit(clientId, canonicalId)
-            ItemKind.Chore -> healChore(clientId, canonicalId)
-            ItemKind.Event -> healEvent(clientId, canonicalId)
+
+        items.transaction { store ->
+            // Snapshot the ids before mutating — the upsert and delete below change the row set, and a
+            // store whose allIds() is a live view would otherwise fault mid-iteration.
+            for (id in store.allIds().toList()) {
+                val row = store.get(id) ?: continue
+                val healed = row.repointing(clientId, canonicalId) ?: continue
+                store.upsert(healed)
+                // The created row moved to a new primary key, so the old one has to go. Ordered after
+                // the insert: the two ids differ, so nothing races, and the row is never absent.
+                if (row.id == clientId) store.delete(clientId)
+            }
         }
-        // Kind-neutral, so it sits here rather than inside healTask (#385): the daily plan holds items
-        // of ANY kind, so an offline-created Habit/Chore/Event that was planned before its id was
-        // healed leaves a plan slot pointing at the dead client id — exactly the Task case this line
-        // has always covered, now reachable for the other three.
+
+        if (kind == ItemKind.Task) rekeyAttachments(clientId, canonicalId)
+        // Kind-neutral since #385: the daily plan holds items of any kind, so an offline-created
+        // definition planned before its id was healed leaves a plan slot pointing at the dead client id.
         planStore.rekeyItem(clientId, canonicalId)
         outbox.repointId(clientId, canonicalId)
         return true
     }
 
-    private suspend fun healTask(clientId: String, canonicalId: String) {
-        val from = TaskId(clientId)
-        val to = TaskId(canonicalId)
-        taskStore.transaction { store ->
-            // Snapshot the ids before mutating — upsert/delete below changes the row set, and a store
-            // whose allIds() is a live view would otherwise fault mid-iteration.
-            for (id in store.allIds().toList()) {
-                val task = store.get(id) ?: continue
-                val newParent = if (task.parentId == from) to else task.parentId
-                val newChildren = task.children.map { if (it == from) to else it }
-                if (task.id == from) {
-                    // Re-key the created row itself, carrying any refs it itself held.
-                    store.upsert(task.copy(id = to, parentId = newParent, children = newChildren))
-                    store.delete(from)
-                } else if (newParent != task.parentId || newChildren != task.children) {
-                    store.upsert(task.copy(parentId = newParent, children = newChildren))
-                }
-            }
-        }
-        rekeyAttachments(clientId, canonicalId)
-    }
-
-    private suspend fun healHabit(clientId: String, canonicalId: String) {
-        val row = habitStore.get(HabitId(clientId)) ?: return
-        habitStore.upsert(row.copy(id = HabitId(canonicalId)))
-        habitStore.delete(HabitId(clientId))
-    }
-
-    private suspend fun healChore(clientId: String, canonicalId: String) {
-        val row = choreStore.get(ChoreId(clientId)) ?: return
-        choreStore.upsert(row.copy(id = ChoreId(canonicalId)))
-        choreStore.delete(ChoreId(clientId))
-    }
-
-    private suspend fun healEvent(clientId: String, canonicalId: String) {
-        val row = eventStore.get(EventId(clientId)) ?: return
-        eventStore.upsert(row.copy(id = EventId(canonicalId)))
-        eventStore.delete(EventId(clientId))
+    /**
+     * This row with every reference to [clientId] moved to [canonicalId], or `null` when it holds none.
+     *
+     * Identity and tree position are all [com.circuitstitch.deferno.core.model.plugin.Core], so the heal
+     * touches no plugin at all. That is the shape ADR-0055 predicts: an id is not a Family.
+     */
+    private fun CachedItem.repointing(clientId: String, canonicalId: String): CachedItem? {
+        val core = item.core
+        val parentId = if (core.parentId == clientId) canonicalId else core.parentId
+        val childIds = core.childIds.map { if (it == clientId) canonicalId else it }
+        val isCreatedRow = core.id == clientId
+        if (!isCreatedRow && parentId == core.parentId && childIds == core.childIds) return null
+        return copy(
+            item = item.copy(
+                core = core.copy(
+                    id = if (isCreatedRow) canonicalId else core.id,
+                    parentId = parentId,
+                    childIds = childIds,
+                ),
+            ),
+        )
     }
 }

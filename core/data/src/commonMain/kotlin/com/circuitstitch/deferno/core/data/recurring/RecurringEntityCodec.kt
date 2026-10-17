@@ -32,8 +32,15 @@ fun String?.toInstantOrNull(): Instant? = this?.let(Instant::parse)
 fun String?.toLocalTimeOrNull(): LocalTime? =
     this?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
 
-/** Defensive decode: an unrecognised stored token degrades to [DefinitionState.Active] (never throws). */
-fun String.toDefinitionStateOrDefault(): DefinitionState =
+/**
+ * Defensive decode: an unrecognised stored token degrades to [DefinitionState.Active], never throws.
+ *
+ * The receiver is nullable because `definition_state` is a nullable column on the one item table — a
+ * Task has no light switch — and a NULL reaching here means a recurring row written before this build.
+ * A caller that must tell "no light switch" apart from "an unreadable one" reads the column itself; the
+ * definition-state source does exactly that.
+ */
+fun String?.toDefinitionStateOrDefault(): DefinitionState =
     DefinitionState.entries.firstOrNull { it.name == this } ?: DefinitionState.Active
 
 // There is deliberately no `toOccurrenceStateOrDefault` here any more (#390, ADR-0053 decision 4).

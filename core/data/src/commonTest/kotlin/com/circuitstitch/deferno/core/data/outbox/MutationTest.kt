@@ -1,10 +1,6 @@
 package com.circuitstitch.deferno.core.data.outbox
 
-import com.circuitstitch.deferno.core.model.Chore
-import com.circuitstitch.deferno.core.model.ChoreId
 import com.circuitstitch.deferno.core.model.DefinitionState
-import com.circuitstitch.deferno.core.model.Event
-import com.circuitstitch.deferno.core.model.EventId
 import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.HydrationState
@@ -14,6 +10,10 @@ import com.circuitstitch.deferno.core.model.Priority
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.model.plugin.Anchor
+import com.circuitstitch.deferno.core.model.plugin.Lifecycle
+import com.circuitstitch.deferno.core.model.plugin.Progress
+import com.circuitstitch.deferno.core.model.recipe.ParityRecipe
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import kotlin.time.Instant
@@ -56,17 +56,24 @@ class MutationTest {
         hydration = HydrationState.Summary,
     )
 
-    private fun habit(id: String = "x", state: DefinitionState = DefinitionState.Active) = Habit(
-        id = HabitId(id), orgSlug = "u-test", title = "habit-$id", definitionState = state, dateCreated = created,
-    )
+    /** A cached Task as the store now holds it — the record every [TaskMutation.applyTo] transforms. */
+    private fun taskItem(
+        id: String = "a",
+        title: String = "title-$id",
+        state: WorkingState = WorkingState.Open,
+    ) = ParityRecipe.read(task(id, title, state))
 
-    private fun chore(id: String = "x", state: DefinitionState = DefinitionState.Active) = Chore(
-        id = ChoreId(id), orgSlug = "u-test", title = "chore-$id", definitionState = state, dateCreated = created,
-    )
-
-    private fun event(id: String = "x", state: DefinitionState = DefinitionState.Active) = Event(
-        id = EventId(id), orgSlug = "u-test", title = "event-$id", definitionState = state, dateCreated = created,
-    )
+    /** A cached recurring definition, for the one intent that addresses a raw item id of any kind. */
+    private fun definitionItem(id: String = "x", state: DefinitionState = DefinitionState.Active) =
+        ParityRecipe.read(
+            Habit(
+                id = HabitId(id),
+                orgSlug = "u-test",
+                title = "habit-$id",
+                definitionState = state,
+                dateCreated = created,
+            ),
+        )
 
     // --- the intent → endpoint → minimal-body table ---
 
@@ -273,21 +280,22 @@ class MutationTest {
         assertEquals("item:h1", SetDefinitionState("h1", ItemKind.Habit, DefinitionState.Archived).target)
     }
 
+    /**
+     * One transform where there were three (#422). The light switch was a typed `applyTo` overload per
+     * kind, because Habit, Chore and Event are three data classes with no supertype. It is one Family
+     * member on one record now, so the kind only picks the endpoint.
+     */
     @Test
-    fun setDefinitionStateAppliesPerKindAndIsIdempotent() {
+    fun setDefinitionStateSwapsTheLifecycleAndIsIdempotent() {
         val intent = SetDefinitionState("x", ItemKind.Habit, DefinitionState.Archived)
+        val active = definitionItem(state = DefinitionState.Active)
 
-        val h = habit(state = DefinitionState.Active)
-        assertEquals(DefinitionState.Archived, intent.applyTo(h).definitionState)
-        assertEquals(intent.applyTo(h), intent.applyTo(intent.applyTo(h)), "habit applyTo must be idempotent")
-
-        val c = chore(state = DefinitionState.Active)
-        assertEquals(DefinitionState.Archived, intent.applyTo(c).definitionState)
-        assertEquals(intent.applyTo(c), intent.applyTo(intent.applyTo(c)), "chore applyTo must be idempotent")
-
-        val e = event(state = DefinitionState.Active)
-        assertEquals(DefinitionState.Archived, intent.applyTo(e).definitionState)
-        assertEquals(intent.applyTo(e), intent.applyTo(intent.applyTo(e)), "event applyTo must be idempotent")
+        val archived = intent.applyTo(active)
+        assertEquals(Lifecycle.Definition(DefinitionState.Archived), archived.progress.lifecycle)
+        assertEquals(archived, intent.applyTo(archived), "applyTo must be idempotent")
+        // A swap, not an addition: the family holds one member, so the Active lifecycle is gone rather
+        // than sitting beside the Archived one.
+        assertEquals(1, archived.plugins.count { it is Progress })
     }
 
     @Test
@@ -318,29 +326,61 @@ class MutationTest {
 
     // --- optimistic apply: correctness + idempotence (replay-safety) ---
 
+    /**
+     * Each intent swaps exactly the Family it names and leaves the rest of the list alone (#422). Title
+     * and the tombstone are the two exceptions: both live on `Core`, because a row would still carry
+     * them saying nothing about when, how often or how strongly (ADR-0055).
+     */
     @Test
-    fun taskApplyTransformsTheRightField() {
-        val base = task(state = WorkingState.Open, title = "old")
-        assertEquals(WorkingState.Done, SetWorkingState(TaskId("a"), WorkingState.Done).applyTo(base).workingState)
-        assertEquals("new", Rename(TaskId("a"), "new").applyTo(base).title)
-        assertEquals(null, ClearDeadline(TaskId("a")).applyTo(base.copy(completeBy = created)).completeBy)
+    fun taskApplySwapsTheRightFamily() {
+        val base = taskItem(state = WorkingState.Open, title = "old")
         assertEquals(
-            LocalTime(14, 30),
-            SetDeadlineTime(TaskId("a"), LocalTime(14, 30)).applyTo(base).deadlineTimeOfDay,
+            Lifecycle.Working(WorkingState.Done),
+            SetWorkingState(TaskId("a"), WorkingState.Done).applyTo(base).progress.lifecycle,
+        )
+        assertEquals("new", Rename(TaskId("a"), "new").applyTo(base).core.title)
+        assertEquals(
+            Anchor.Deadline(completeBy = created),
+            SetDeadline(TaskId("a"), created).applyTo(base).anchor,
         )
         assertEquals(
-            null,
-            SetDeadlineTime(TaskId("a"), null).applyTo(base.copy(deadlineTimeOfDay = LocalTime(9, 0))).deadlineTimeOfDay,
+            Anchor.Deadline(timeOfDay = LocalTime(14, 30)),
+            SetDeadlineTime(TaskId("a"), LocalTime(14, 30)).applyTo(base).anchor,
         )
-        assertEquals(null, ClearDescription(TaskId("a")).applyTo(base.copy(description = "x")).description)
-        assertEquals(listOf("home"), SetLabels(TaskId("a"), listOf("home")).applyTo(base).labels)
-        assertTrue(SetPinned(TaskId("a"), true).applyTo(base).pinned)
-        assertTrue(DeleteTask(TaskId("a"), created).applyTo(base).isDeleted)
+        assertEquals("x", SetDescription(TaskId("a"), "x").applyTo(base).describable.description)
+        assertEquals(null, ClearDescription(TaskId("a")).applyTo(base).describable.description)
+        assertEquals(listOf("home"), SetLabels(TaskId("a"), listOf("home")).applyTo(base).taggable.labels)
+        assertTrue(SetPinned(TaskId("a"), true).applyTo(base).priority.pinned)
+        assertEquals(created, SetTargetDate(TaskId("a"), created).applyTo(base).targeted.targetDate)
+        assertEquals(Priority.Fire, SetPriority(TaskId("a"), Priority.Fire).applyTo(base).priority.priority)
+        assertTrue(DeleteTask(TaskId("a"), created).applyTo(base).core.isDeleted)
+    }
+
+    /**
+     * Clearing a Family's last field **unloads the Family** rather than loading a member equal to its
+     * own silence (#422). That is the sparseness rule the recipe round trip rests on: a list holding a
+     * plugin that says nothing would make two lists correspond to one row, and the round trip an
+     * equivalence rather than an identity. It is why every transform goes through `loading`.
+     */
+    @Test
+    fun clearingTheLastFieldOfAFamilyUnloadsIt() {
+        val dated = SetDeadline(TaskId("a"), created).applyTo(taskItem())
+        assertEquals(Anchor.Unanchored, ClearDeadline(TaskId("a")).applyTo(dated).anchor)
+        assertFalse(ClearDeadline(TaskId("a")).applyTo(dated).plugins.any { it is Anchor })
+
+        // …but only when nothing else in the Family is left. A deadline still carrying its clock time is
+        // a deadline, and clearing the instant alone must not take the clock with it.
+        val timed = SetDeadlineTime(TaskId("a"), LocalTime(9, 0)).applyTo(dated)
+        assertEquals(
+            Anchor.Deadline(timeOfDay = LocalTime(9, 0)),
+            ClearDeadline(TaskId("a")).applyTo(timed).anchor,
+        )
+        assertEquals(Anchor.Unanchored, SetDeadlineTime(TaskId("a"), null).applyTo(taskItem()).anchor)
     }
 
     @Test
     fun taskApplyIsIdempotent() {
-        val base = task(state = WorkingState.Open)
+        val base = taskItem(state = WorkingState.Open)
         val intents = listOf(
             SetWorkingState(TaskId("a"), WorkingState.Done),
             Rename(TaskId("a"), "x"),

@@ -157,3 +157,18 @@ fun List<Plugin>.replacingFamilyOf(replacement: Plugin): List<Plugin> =
  */
 fun List<Plugin>.withoutFamilyOf(member: Plugin): List<Plugin> =
     filterNot { it.family == member.family }
+
+/**
+ * Load [member], **or unload its family when [member] says nothing** — the swap an edit performs.
+ *
+ * It is [replacingFamilyOf] plus the sparseness rule, and the pair is not interchangeable. A list must
+ * hold no plugin equal to its family's silence: that is what makes exactly one plugin list correspond to
+ * a row, and therefore what makes the recipe round trip an identity rather than an equivalence. An edit
+ * that clears the last field of a family — a deadline losing both its instant and its time of day — has
+ * to unload the family, not load an empty member beside it.
+ *
+ * Every optimistic transform in `core:data`'s outbox goes through this rather than through
+ * [replacingFamilyOf] directly, for exactly that reason (#422).
+ */
+fun List<Plugin>.loading(member: Plugin): List<Plugin> =
+    if (member.saysSomething) replacingFamilyOf(member) else withoutFamilyOf(member)

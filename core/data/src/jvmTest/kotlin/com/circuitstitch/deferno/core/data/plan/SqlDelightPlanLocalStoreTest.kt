@@ -2,10 +2,8 @@ package com.circuitstitch.deferno.core.data.plan
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import app.cash.turbine.test
-import com.circuitstitch.deferno.core.data.chore.SqlDelightChoreLocalStore
-import com.circuitstitch.deferno.core.data.event.SqlDelightEventLocalStore
-import com.circuitstitch.deferno.core.data.habit.SqlDelightHabitLocalStore
-import com.circuitstitch.deferno.core.data.task.SqlDelightTaskLocalStore
+import com.circuitstitch.deferno.core.data.item.SqlDelightItemLocalStore
+import com.circuitstitch.deferno.core.data.item.cached
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.Habit
@@ -171,13 +169,12 @@ class SqlDelightPlanLocalStoreTest {
     @Test
     fun fullPlanFlowResolvesToDomainRowsInPlanOrderThroughRealSqlite() = runTest {
         val db = newDb()
-        val taskStore = SqlDelightTaskLocalStore(db, Dispatchers.Default)
-        val habitStore = SqlDelightHabitLocalStore(db, Dispatchers.Default)
+        val items = SqlDelightItemLocalStore(db, Dispatchers.Default)
         val planStore = SqlDelightPlanLocalStore(db, Dispatchers.Default)
 
         // Cache the items first (sequence order differs from plan order).
-        listOf(task("a", 1), task("b", 2), task("c", 3)).forEach { taskStore.upsert(it) }
-        habitStore.upsert(habit("h1", "Take a Walk"))
+        listOf(task("a", 1), task("b", 2), task("c", 3)).forEach { items.upsert(it.cached()) }
+        items.upsert(habit("h1", "Take a Walk").cached())
         // Then the plan ordering: a cross-kind day, plus one entry whose row isn't cached (skipped).
         val plan = OfflinePlanRepository(
             planStore,
@@ -190,10 +187,7 @@ class SqlDelightPlanLocalStoreTest {
                     PlanItemRef("b", ItemKind.Task),
                 ),
             ),
-            taskStore,
-            habitStore,
-            SqlDelightChoreLocalStore(db, Dispatchers.Default),
-            SqlDelightEventLocalStore(db, Dispatchers.Default),
+            items,
         )
         plan.refreshPlan(date, tz)
 

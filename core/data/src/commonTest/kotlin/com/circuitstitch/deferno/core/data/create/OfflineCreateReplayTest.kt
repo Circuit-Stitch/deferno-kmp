@@ -5,9 +5,8 @@ import com.circuitstitch.deferno.core.data.outbox.FakeOutboxRequestSender
 import com.circuitstitch.deferno.core.data.outbox.FakeOutboxStore
 import com.circuitstitch.deferno.core.data.outbox.OutboxProcessor
 import com.circuitstitch.deferno.core.data.plan.FakePlanLocalStore
-import com.circuitstitch.deferno.core.data.task.FakeTaskLocalStore
+import com.circuitstitch.deferno.core.data.item.FakeItemLocalStore
 import com.circuitstitch.deferno.core.model.ItemKind
-import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.network.dto.CreateTaskPayload
 import kotlinx.coroutines.test.runTest
 import kotlin.time.Instant
@@ -28,10 +27,7 @@ class OfflineCreateReplayTest {
     private val t0 = Instant.parse("2026-06-07T12:00:00Z")
 
     private class Fixture(clientId: String = "client-1") {
-        val taskStore = FakeTaskLocalStore()
-        val habitStore = FakeHabitLocalStore()
-        val choreStore = FakeChoreLocalStore()
-        val eventStore = FakeEventLocalStore()
+        val items = FakeItemLocalStore()
         val planStore = FakePlanLocalStore()
         val outbox = FakeOutboxStore()
         val pending = FakePendingCreateStore()
@@ -39,17 +35,14 @@ class OfflineCreateReplayTest {
         val writer = OfflineCreateWriter(
             connectivity = FakeConnectivity(online = false),
             converter = FakeItemConverter(),
-            taskStore = taskStore,
-            habitStore = habitStore,
-            choreStore = choreStore,
-            eventStore = eventStore,
+            items = items,
             outbox = outbox,
             pendingCreateStore = pending,
             newId = { clientId },
             now = { Instant.parse("2026-06-07T12:00:00Z") },
             orgSlug = { "u-test" },
         )
-        val healer = ItemIdHealer(taskStore, habitStore, choreStore, eventStore, planStore, outbox)
+        val healer = ItemIdHealer(items, planStore, outbox)
         val listener = DefaultCreateReplayListener(healer, pending)
         val processor = OutboxProcessor(outbox, sender, reconcile = {}, createListener = listener)
     }
@@ -65,7 +58,7 @@ class OfflineCreateReplayTest {
         assertEquals(1, result.succeeded)
         assertEquals(0L, f.outbox.count()) // create entry drained, no re-send
         // Local row stays under the same id; the pending row is now confirmed.
-        assertEquals(setOf(TaskId("client-1")), f.taskStore.all.keys)
+        assertEquals(setOf("client-1"), f.items.all.keys)
         val pending = f.pending.all.single()
         assertEquals(PendingCreateState.Confirmed, pending.state)
         assertEquals("client-1", pending.canonicalId)
@@ -81,8 +74,8 @@ class OfflineCreateReplayTest {
 
         assertEquals(1, result.succeeded)
         // The Item row was re-keyed to the server's canonical id.
-        assertNull(f.taskStore.all[TaskId("client-1")])
-        assertTrue(f.taskStore.all.containsKey(TaskId("server-9")))
+        assertNull(f.items.all["client-1"])
+        assertTrue(f.items.all.containsKey("server-9"))
         // The pending row moved to the canonical id and is confirmed.
         val pending = f.pending.all.single()
         assertEquals("server-9", pending.itemId)
@@ -102,7 +95,7 @@ class OfflineCreateReplayTest {
         val entry = f.outbox.all.single()
         assertEquals(t0, entry.failedAt)
         // The optimistic Item row + its pending-create purge-protection survive (still there, still Pending).
-        assertTrue(f.taskStore.all.containsKey(TaskId("client-1")))
+        assertTrue(f.items.all.containsKey("client-1"))
         assertEquals(PendingCreateState.Pending, f.pending.all.single().state)
 
         // A later flush skips the dead-lettered entry — no retry loop, no second send to the server.

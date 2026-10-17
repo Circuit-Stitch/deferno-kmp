@@ -1,8 +1,8 @@
 package com.circuitstitch.deferno.core.data.definition
 
-import com.circuitstitch.deferno.core.data.create.FakeChoreLocalStore
-import com.circuitstitch.deferno.core.data.create.FakeEventLocalStore
-import com.circuitstitch.deferno.core.data.create.FakeHabitLocalStore
+import com.circuitstitch.deferno.core.data.item.FakeItemLocalStore
+import com.circuitstitch.deferno.core.data.item.cacheOf
+import com.circuitstitch.deferno.core.data.item.cached
 import com.circuitstitch.deferno.core.data.outbox.FakeOutboxStore
 import com.circuitstitch.deferno.core.data.outbox.OutboxMethod
 import com.circuitstitch.deferno.core.model.Chore
@@ -15,6 +15,9 @@ import com.circuitstitch.deferno.core.model.HabitId
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Priority
+import com.circuitstitch.deferno.core.model.plugin.Item
+import com.circuitstitch.deferno.core.model.plugin.Lifecycle
+import com.circuitstitch.deferno.core.model.recipe.ParityRecipe
 import kotlinx.coroutines.test.runTest
 import kotlin.time.Instant
 import kotlin.test.Test
@@ -25,15 +28,16 @@ import kotlin.test.assertTrue
 
 /**
  * The recurring-definition write path (#299, widened by #378): [OutboxDefinitionWriter] applies each
- * edit optimistically to the correct per-kind local cache (so the Item tree reflects it instantly),
- * captures the pre-apply before-image for the Activity diff, and enqueues its idempotent
- * `PATCH {kind}/{id}` request for replay. The recurring-kind mirror of `OutboxTaskWriterTest`, run
- * against the in-memory fakes (ADR-0006 JVM-fast path).
+ * edit optimistically to the cached record (so the Item tree reflects it instantly), captures the
+ * pre-apply before-image for the Activity diff, and enqueues its idempotent `PATCH {kind}/{id}` request
+ * for replay. The recurring-kind mirror of `OutboxTaskWriterTest`, run against the in-memory fake
+ * (ADR-0006 JVM-fast path).
  *
- * The three verbs are asserted per kind because the store dispatch and the endpoint are both
- * kind-selected: a kind wired to the wrong store would corrupt a neighbouring cache, and one wired to
- * the wrong route would drain as a `404` — which the sender classifies Success, so the write would
- * vanish with nothing to observe.
+ * The three verbs are still asserted **per kind**, because the endpoint is kind-selected and a write on
+ * the wrong route drains as a `404` — which the sender classifies Success, so the write would vanish
+ * with nothing to observe. What is no longer asserted per kind is the store: there is one (#422), and
+ * with it went the `when (kind)` dispatch and the hand-rolled `DefinitionFields` projection that existed
+ * so the dispatch could be written once rather than once per verb.
  */
 class OutboxDefinitionWriterTest {
 
@@ -77,23 +81,28 @@ class OutboxDefinitionWriterTest {
     )
 
     private fun writer(
-        habits: FakeHabitLocalStore = FakeHabitLocalStore(),
-        chores: FakeChoreLocalStore = FakeChoreLocalStore(),
-        events: FakeEventLocalStore = FakeEventLocalStore(),
+        items: FakeItemLocalStore = FakeItemLocalStore(),
         outbox: FakeOutboxStore = FakeOutboxStore(),
-    ) = OutboxDefinitionWriter(habits, chores, events, outbox, now = { now })
+    ) = OutboxDefinitionWriter(items, outbox, now = { now })
+
+    /** The cached record for [id] — what each verb's optimistic transform rewrote. */
+    private fun FakeItemLocalStore.row(id: String): Item = all.getValue(id).item
+
+    /** This record's light switch, read the way the writer reads it. */
+    private val Item.definitionState: DefinitionState?
+        get() = (progress.lifecycle as? Lifecycle.Definition)?.state
 
     // --- setDefinitionState: the "light switch" (#299) ---
 
     @Test
     fun habitArchiveAppliesOptimisticallyAndEnqueuesTheStatusPatch() = runTest {
-        val habits = FakeHabitLocalStore(mapOf(HabitId("h") to habit("h")))
+        val items = FakeItemLocalStore(cacheOf(habit("h").cached()))
         val outbox = FakeOutboxStore()
 
-        writer(habits = habits, outbox = outbox).setDefinitionState("h", ItemKind.Habit, DefinitionState.Archived)
+        writer(items, outbox).setDefinitionState("h", ItemKind.Habit, DefinitionState.Archived)
 
         // Optimistic local apply — visible immediately, before any network.
-        assertEquals(DefinitionState.Archived, habits.all.getValue(HabitId("h")).definitionState)
+        assertEquals(DefinitionState.Archived, items.row("h").definitionState)
         // Enqueued, ready to dispatch now.
         val entry = outbox.all.single()
         assertEquals("item:h", entry.target)
@@ -107,41 +116,42 @@ class OutboxDefinitionWriterTest {
     }
 
     @Test
-    fun choreRestoreAppliesToTheChoreStoreOnly() = runTest {
-        val chores = FakeChoreLocalStore(mapOf(ChoreId("c") to chore("c", DefinitionState.Archived)))
-        val habits = FakeHabitLocalStore()
+    fun choreRestoreRewritesTheAddressedRowAlone() = runTest {
+        val items = FakeItemLocalStore(
+            cacheOf(chore("c", DefinitionState.Archived).cached(), habit("h", DefinitionState.Archived).cached()),
+        )
         val outbox = FakeOutboxStore()
 
-        writer(habits = habits, chores = chores, outbox = outbox)
-            .setDefinitionState("c", ItemKind.Chore, DefinitionState.Active)
+        writer(items, outbox).setDefinitionState("c", ItemKind.Chore, DefinitionState.Active)
 
-        assertEquals(DefinitionState.Active, chores.all.getValue(ChoreId("c")).definitionState)
-        assertTrue(habits.all.isEmpty(), "a chore write must not touch the habit store")
+        assertEquals(DefinitionState.Active, items.row("c").definitionState)
+        // One cache means "the right store" is no longer a question, but "the right row" still is.
+        assertEquals(DefinitionState.Archived, items.row("h").definitionState, "a neighbouring row must not move")
         assertEquals(listOf("chores", "c"), outbox.all.single().request.path)
         assertEquals("""{"status":"active"}""", outbox.all.single().request.body)
         assertEquals("""{"status":"archived"}""", outbox.enqueuedBefore.single())
     }
 
     @Test
-    fun eventArchiveAppliesToTheEventStore() = runTest {
-        val events = FakeEventLocalStore(mapOf(EventId("e") to event("e")))
+    fun eventArchiveUsesTheEventEndpoint() = runTest {
+        val items = FakeItemLocalStore(cacheOf(event("e").cached()))
         val outbox = FakeOutboxStore()
 
-        writer(events = events, outbox = outbox).setDefinitionState("e", ItemKind.Event, DefinitionState.Archived)
+        writer(items, outbox).setDefinitionState("e", ItemKind.Event, DefinitionState.Archived)
 
-        assertEquals(DefinitionState.Archived, events.all.getValue(EventId("e")).definitionState)
+        assertEquals(DefinitionState.Archived, items.row("e").definitionState)
         assertEquals(listOf("events", "e"), outbox.all.single().request.path)
         assertEquals("""{"status":"active"}""", outbox.enqueuedBefore.single())
     }
 
     @Test
     fun aWriteToAnAbsentRowSkipsTheApplyButStillEnqueues() = runTest {
-        val habits = FakeHabitLocalStore() // empty
+        val items = FakeItemLocalStore() // empty
         val outbox = FakeOutboxStore()
 
-        writer(habits = habits, outbox = outbox).setDefinitionState("ghost", ItemKind.Habit, DefinitionState.Archived)
+        writer(items, outbox).setDefinitionState("ghost", ItemKind.Habit, DefinitionState.Archived)
 
-        assertTrue(habits.all.isEmpty(), "no phantom row materialised")
+        assertTrue(items.all.isEmpty(), "no phantom row materialised")
         assertEquals(1, outbox.all.size, "the write is not lost — it reconciles on replay")
         assertEquals("""{"status":"archived"}""", outbox.all.single().request.body)
         // Nothing was cached, so there is no old value to claim — the ledger renders "previously
@@ -153,12 +163,12 @@ class OutboxDefinitionWriterTest {
 
     @Test
     fun habitTargetDateAppliesOptimisticallyAndEnqueuesTheDatePatch() = runTest {
-        val habits = FakeHabitLocalStore(mapOf(HabitId("h") to habit("h", targetDate = deadline)))
+        val items = FakeItemLocalStore(cacheOf(habit("h", targetDate = deadline).cached()))
         val outbox = FakeOutboxStore()
 
-        writer(habits = habits, outbox = outbox).setTargetDate("h", ItemKind.Habit, wanted)
+        writer(items, outbox).setTargetDate("h", ItemKind.Habit, wanted)
 
-        assertEquals(wanted, habits.all.getValue(HabitId("h")).targetDate)
+        assertEquals(wanted, items.row("h").targeted.targetDate)
         val entry = outbox.all.single()
         assertEquals("item:h", entry.target)
         assertEquals(OutboxMethod.Patch, entry.request.method)
@@ -168,27 +178,28 @@ class OutboxDefinitionWriterTest {
     }
 
     @Test
-    fun choreTargetDateClearAppliesToTheChoreStoreOnly() = runTest {
-        val chores = FakeChoreLocalStore(mapOf(ChoreId("c") to chore("c", targetDate = wanted)))
-        val events = FakeEventLocalStore()
+    fun choreTargetDateClearRewritesTheAddressedRowAlone() = runTest {
+        val items = FakeItemLocalStore(
+            cacheOf(chore("c", targetDate = wanted).cached(), event("e", targetDate = wanted).cached()),
+        )
         val outbox = FakeOutboxStore()
 
-        writer(chores = chores, events = events, outbox = outbox).setTargetDate("c", ItemKind.Chore, null)
+        writer(items, outbox).setTargetDate("c", ItemKind.Chore, null)
 
-        assertNull(chores.all.getValue(ChoreId("c")).targetDate)
-        assertTrue(events.all.isEmpty(), "a chore write must not touch the event store")
+        assertNull(items.row("c").targeted.targetDate)
+        assertEquals(wanted, items.row("e").targeted.targetDate, "a neighbouring row must not move")
         assertEquals(listOf("chores", "c"), outbox.all.single().request.path)
         assertEquals("""{"target_date":null}""", outbox.all.single().request.body)
     }
 
     @Test
-    fun eventTargetDateAppliesToTheEventStore() = runTest {
-        val events = FakeEventLocalStore(mapOf(EventId("e") to event("e")))
+    fun eventTargetDateUsesTheEventEndpoint() = runTest {
+        val items = FakeItemLocalStore(cacheOf(event("e").cached()))
         val outbox = FakeOutboxStore()
 
-        writer(events = events, outbox = outbox).setTargetDate("e", ItemKind.Event, wanted)
+        writer(items, outbox).setTargetDate("e", ItemKind.Event, wanted)
 
-        assertEquals(wanted, events.all.getValue(EventId("e")).targetDate)
+        assertEquals(wanted, items.row("e").targeted.targetDate)
         assertEquals(listOf("events", "e"), outbox.all.single().request.path)
         // No old date to diff against — an explicit null, the same key the body carries.
         assertEquals("""{"target_date":null}""", outbox.enqueuedBefore.single())
@@ -199,25 +210,25 @@ class OutboxDefinitionWriterTest {
         // The commonest recurring shape: complete_by is a moving cursor that is routinely in the past.
         // The server clamps a later target down to it (#629) and answers 200, so an unclamped optimistic
         // row would show a date the server never stored and the control would appear to do nothing.
-        val habits = FakeHabitLocalStore(mapOf(HabitId("h") to habit("h", completeBy = deadline)))
+        val items = FakeItemLocalStore(cacheOf(habit("h", completeBy = deadline).cached()))
         val outbox = FakeOutboxStore()
         val requested = Instant.parse("2026-06-30T09:00:00Z")
 
-        writer(habits = habits, outbox = outbox).setTargetDate("h", ItemKind.Habit, requested)
+        writer(items, outbox).setTargetDate("h", ItemKind.Habit, requested)
 
-        assertEquals(deadline, habits.all.getValue(HabitId("h")).targetDate)
+        assertEquals(deadline, items.row("h").targeted.targetDate)
         // The wire value stays raw: the server clamps against its own authoritative deadline.
         assertEquals("""{"target_date":"2026-06-30T09:00:00Z"}""", outbox.all.single().request.body)
     }
 
     @Test
     fun aTargetDateWriteToAnAbsentRowSkipsTheApplyButStillEnqueues() = runTest {
-        val habits = FakeHabitLocalStore()
+        val items = FakeItemLocalStore()
         val outbox = FakeOutboxStore()
 
-        writer(habits = habits, outbox = outbox).setTargetDate("ghost", ItemKind.Habit, wanted)
+        writer(items, outbox).setTargetDate("ghost", ItemKind.Habit, wanted)
 
-        assertTrue(habits.all.isEmpty(), "no phantom row materialised")
+        assertTrue(items.all.isEmpty(), "no phantom row materialised")
         assertEquals("""{"target_date":"2026-06-05T09:00:00Z"}""", outbox.all.single().request.body)
         assertNull(outbox.enqueuedBefore.single())
     }
@@ -226,12 +237,12 @@ class OutboxDefinitionWriterTest {
 
     @Test
     fun habitPriorityAppliesOptimisticallyAndEnqueuesThePriorityPatch() = runTest {
-        val habits = FakeHabitLocalStore(mapOf(HabitId("h") to habit("h", priority = Priority.Normal)))
+        val items = FakeItemLocalStore(cacheOf(habit("h", priority = Priority.Normal).cached()))
         val outbox = FakeOutboxStore()
 
-        writer(habits = habits, outbox = outbox).setPriority("h", ItemKind.Habit, Priority.Fire)
+        writer(items, outbox).setPriority("h", ItemKind.Habit, Priority.Fire)
 
-        assertEquals(Priority.Fire, habits.all.getValue(HabitId("h")).priority)
+        assertEquals(Priority.Fire, items.row("h").priority.priority)
         val entry = outbox.all.single()
         assertEquals(listOf("habits", "h"), entry.request.path)
         assertEquals("""{"priority":"fire"}""", entry.request.body)
@@ -239,40 +250,41 @@ class OutboxDefinitionWriterTest {
     }
 
     @Test
-    fun chorePriorityAppliesToTheChoreStoreOnly() = runTest {
-        val chores = FakeChoreLocalStore(mapOf(ChoreId("c") to chore("c", priority = Priority.Fire)))
-        val habits = FakeHabitLocalStore()
+    fun chorePriorityRewritesTheAddressedRowAlone() = runTest {
+        val items = FakeItemLocalStore(
+            cacheOf(chore("c", priority = Priority.Fire).cached(), habit("h", priority = Priority.Fire).cached()),
+        )
         val outbox = FakeOutboxStore()
 
-        writer(habits = habits, chores = chores, outbox = outbox).setPriority("c", ItemKind.Chore, Priority.Backlog)
+        writer(items, outbox).setPriority("c", ItemKind.Chore, Priority.Backlog)
 
-        assertEquals(Priority.Backlog, chores.all.getValue(ChoreId("c")).priority)
-        assertTrue(habits.all.isEmpty(), "a chore write must not touch the habit store")
+        assertEquals(Priority.Backlog, items.row("c").priority.priority)
+        assertEquals(Priority.Fire, items.row("h").priority.priority, "a neighbouring row must not move")
         assertEquals(listOf("chores", "c"), outbox.all.single().request.path)
         assertEquals("""{"priority":"backlog"}""", outbox.all.single().request.body)
         assertEquals("""{"priority":"fire"}""", outbox.enqueuedBefore.single())
     }
 
     @Test
-    fun eventPriorityAppliesToTheEventStore() = runTest {
-        val events = FakeEventLocalStore(mapOf(EventId("e") to event("e")))
+    fun eventPriorityUsesTheEventEndpoint() = runTest {
+        val items = FakeItemLocalStore(cacheOf(event("e").cached()))
         val outbox = FakeOutboxStore()
 
-        writer(events = events, outbox = outbox).setPriority("e", ItemKind.Event, Priority.Backlog)
+        writer(items, outbox).setPriority("e", ItemKind.Event, Priority.Backlog)
 
-        assertEquals(Priority.Backlog, events.all.getValue(EventId("e")).priority)
+        assertEquals(Priority.Backlog, items.row("e").priority.priority)
         assertEquals(listOf("events", "e"), outbox.all.single().request.path)
         assertEquals("""{"priority":"backlog"}""", outbox.all.single().request.body)
     }
 
     @Test
     fun aPriorityWriteToAnAbsentRowSkipsTheApplyButStillEnqueues() = runTest {
-        val events = FakeEventLocalStore()
+        val items = FakeItemLocalStore()
         val outbox = FakeOutboxStore()
 
-        writer(events = events, outbox = outbox).setPriority("ghost", ItemKind.Event, Priority.Fire)
+        writer(items, outbox).setPriority("ghost", ItemKind.Event, Priority.Fire)
 
-        assertTrue(events.all.isEmpty(), "no phantom row materialised")
+        assertTrue(items.all.isEmpty(), "no phantom row materialised")
         assertEquals("""{"priority":"fire"}""", outbox.all.single().request.body)
         assertNull(outbox.enqueuedBefore.single())
     }
@@ -284,6 +296,8 @@ class OutboxDefinitionWriterTest {
         val outbox = FakeOutboxStore()
         val writer = writer(outbox = outbox)
 
+        // `ItemKind.recurringPath()` refuses first, while the request is being built — before the
+        // writer's own `require` is even reached, since the request is an argument to `submit`.
         assertFailsWith<IllegalStateException> { writer.setDefinitionState("t", ItemKind.Task, DefinitionState.Archived) }
         assertFailsWith<IllegalStateException> { writer.setTargetDate("t", ItemKind.Task, wanted) }
         assertFailsWith<IllegalStateException> { writer.setPriority("t", ItemKind.Task, Priority.Fire) }
@@ -292,20 +306,19 @@ class OutboxDefinitionWriterTest {
     }
 
     @Test
-    fun eachVerbRewritesOnlyItsOwnFieldOnTheCachedRow() = runTest {
-        // The shared dispatch lowers a whole DefinitionFields back onto the row, so the projection's
-        // untouched members have to round-trip: a verb that quietly reset a neighbour would be invisible
-        // to the per-verb assertions above.
-        val habits = FakeHabitLocalStore(
-            mapOf(HabitId("h") to habit("h", state = DefinitionState.InReview, targetDate = wanted, priority = Priority.Fire)),
+    fun eachVerbSwapsOnlyItsOwnFamilyOnTheCachedRow() = runTest {
+        // Each verb is a Family swap now, where it used to lower a whole `DefinitionFields` back onto the
+        // row — so a verb that quietly reset a neighbouring field would be invisible to the per-verb
+        // assertions above. The claim is asserted over the whole written-back row rather than field by
+        // field, so a family nobody thought to name here is still covered.
+        val before = habit("h", state = DefinitionState.InReview, targetDate = wanted, priority = Priority.Fire)
+        val items = FakeItemLocalStore(cacheOf(before.cached()))
+
+        writer(items).setPriority("h", ItemKind.Habit, Priority.Backlog)
+
+        assertEquals(
+            before.copy(priority = Priority.Backlog),
+            ParityRecipe.writeHabit(items.row("h")),
         )
-
-        writer(habits = habits).setPriority("h", ItemKind.Habit, Priority.Backlog)
-
-        val row = habits.all.getValue(HabitId("h"))
-        assertEquals(Priority.Backlog, row.priority)
-        assertEquals(DefinitionState.InReview, row.definitionState)
-        assertEquals(wanted, row.targetDate)
-        assertEquals("habit-h", row.title)
     }
 }

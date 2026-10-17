@@ -1,11 +1,11 @@
 package com.circuitstitch.deferno.core.data.outbox
 
-import com.circuitstitch.deferno.core.model.Chore
-import com.circuitstitch.deferno.core.model.DefinitionState
-import com.circuitstitch.deferno.core.model.Event
-import com.circuitstitch.deferno.core.model.Habit
 import com.circuitstitch.deferno.core.model.ItemKind
 import com.circuitstitch.deferno.core.model.Priority
+import com.circuitstitch.deferno.core.model.plugin.Anchor
+import com.circuitstitch.deferno.core.model.plugin.Item
+import com.circuitstitch.deferno.core.model.plugin.Targeted
+import com.circuitstitch.deferno.core.model.plugin.loading
 import com.circuitstitch.deferno.core.network.mapper.toWireToken
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -30,13 +30,11 @@ import kotlin.time.Instant
  * | [SetDefinitionPriority] | `PATCH {habits\|chores\|events}/{id}` | `{"priority":"<fire\|normal\|backlog>"}` (never `null`) |
  * | [DeleteItem] | `DELETE items/{id}` | *(no body; soft-delete — and kind-neutral, so not in this hierarchy)* |
  *
- * **One optimistic transform, not three.** [SetDefinitionState] carries an `applyTo` overload per kind
- * (Mutation.kt) because Habit/Chore/Event are three unrelated data classes with no supertype to write
- * against. Copying that shape here would have meant six more overloads *and* a second and third
- * `when (kind)` store dispatch in [com.circuitstitch.deferno.core.data.definition.OutboxDefinitionWriter]
- * — three four-arm dispatches, each arm separately uncovered. So these transform a [DefinitionFields]
- * instead: the narrow kind-neutral projection of what a definition edit reads or writes, which lets the
- * writer lift and lower once for every intent.
+ * **One optimistic transform, not three.** These transformed a `DefinitionFields` until #422 — a narrow
+ * kind-neutral projection of what a definition edit reads or writes, hand-written because Habit, Chore
+ * and Event are three data classes with no supertype, and lifted and lowered by a `when (kind)` in the
+ * writer. The cache holds the plugin-shaped record now, so the projection is the record and the lift is
+ * gone. Each transform is a Family swap.
  */
 sealed interface DefinitionMutation : Mutation {
 
@@ -49,65 +47,22 @@ sealed interface DefinitionMutation : Mutation {
     override val target: String get() = "item:$id"
 
     /**
-     * The optimistic local effect — a **pure** transform of the cached row's [DefinitionFields] (no side
-     * effects, no exceptions). Replay-safe: `apply(apply(f)) == apply(f)`, mirroring the idempotence of
-     * the wire intent, so a double-apply never compounds.
+     * The optimistic local effect — a **pure** transform of the cached [item] (no side effects, no
+     * exceptions). Replay-safe: `apply(apply(i)) == apply(i)`, mirroring the idempotence of the wire
+     * intent, so a double-apply never compounds.
      */
-    fun apply(fields: DefinitionFields): DefinitionFields
+    fun apply(item: Item): Item
 
     /**
-     * The **old** values of exactly the keys [toRequest]'s body carries, in the same JSON keys/encoding —
-     * the "before" half of the Activity ledger's old→new diff, snapshotted from the pre-apply row. The
-     * recurring counterpart of `TaskMutation.beforeValues` (Mutation.kt), which cannot be reused: it is
-     * an extension on a `Task` receiver with an exhaustive `when` over the Task intents.
+     * The **old** values of exactly the keys [toRequest]'s body carries, in the same JSON keys and
+     * encoding — the "before" half of the Activity ledger's old-to-new diff, snapshotted from the
+     * pre-apply record. The recurring counterpart of `TaskMutation.beforeValues` (Mutation.kt), which
+     * cannot be reused: it has an exhaustive `when` over the Task intents.
      *
      * Non-null, unlike the Task version: every intent here edits a field, and none of them is a delete.
      */
-    fun beforeValues(fields: DefinitionFields): JsonObject
+    fun beforeValues(item: Item): JsonObject
 }
-
-/**
- * The kind-neutral projection of a cached recurring definition — exactly the fields a
- * [DefinitionMutation] reads or writes. The definition-row analogue of
- * [com.circuitstitch.deferno.core.model.Item], the cross-kind projection `planMove` orders on.
- *
- * It exists because Habit, Chore and Event are three unrelated data classes: without it every intent
- * would need one transform per kind and the writer one store dispatch per method. With it, each intent
- * states its effect once and the writer's single `when (kind)` lifts the row here and lowers it back.
- *
- * [completeBy] is **read-only** here — nothing in this file sets it. It is carried because
- * [SetDefinitionTargetDate] cannot reproduce the server's clamp without seeing the deadline.
- */
-data class DefinitionFields(
-    val definitionState: DefinitionState,
-    val targetDate: Instant?,
-    val priority: Priority,
-    val completeBy: Instant?,
-)
-
-/** Lift a cached Habit onto the kind-neutral [DefinitionFields] a [DefinitionMutation] transforms. */
-internal fun Habit.definitionFields(): DefinitionFields =
-    DefinitionFields(definitionState, targetDate, priority, completeBy)
-
-/** Lower a transformed [DefinitionFields] back onto the cached Habit — only the writable three. */
-internal fun Habit.withDefinitionFields(fields: DefinitionFields): Habit =
-    copy(definitionState = fields.definitionState, targetDate = fields.targetDate, priority = fields.priority)
-
-/** Lift a cached Chore onto its [DefinitionFields] (the [Habit] twin — the three kinds share no supertype). */
-internal fun Chore.definitionFields(): DefinitionFields =
-    DefinitionFields(definitionState, targetDate, priority, completeBy)
-
-/** Lower a transformed [DefinitionFields] back onto the cached Chore. */
-internal fun Chore.withDefinitionFields(fields: DefinitionFields): Chore =
-    copy(definitionState = fields.definitionState, targetDate = fields.targetDate, priority = fields.priority)
-
-/** Lift a cached Event onto its [DefinitionFields]. */
-internal fun Event.definitionFields(): DefinitionFields =
-    DefinitionFields(definitionState, targetDate, priority, completeBy)
-
-/** Lower a transformed [DefinitionFields] back onto the cached Event. */
-internal fun Event.withDefinitionFields(fields: DefinitionFields): Event =
-    copy(definitionState = fields.definitionState, targetDate = fields.targetDate, priority = fields.priority)
 
 /**
  * Set (or clear) a recurring definition's **soft target date** (#375, #378) — the recurring sibling of
@@ -124,11 +79,18 @@ data class SetDefinitionTargetDate(
     val targetDate: Instant?,
 ) : DefinitionMutation {
 
-    override fun apply(fields: DefinitionFields): DefinitionFields =
-        fields.copy(targetDate = clampTargetDate(targetDate, fields.completeBy))
+    // The deadline the clamp reads is the Temporal Family's, which on a recurring definition is the
+    // Recurrence cursor rather than a bound (#439). That is what the field held before the re-cut too:
+    // the clamp has always been reading `complete_by`.
+    override fun apply(item: Item): Item =
+        item.copy(
+            plugins = item.plugins.loading(
+                Targeted(clampTargetDate(targetDate, (item.anchor as? Anchor.Deadline)?.completeBy)),
+            ),
+        )
 
-    override fun beforeValues(fields: DefinitionFields): JsonObject =
-        buildJsonObject { putTargetDate(fields.targetDate) }
+    override fun beforeValues(item: Item): JsonObject =
+        buildJsonObject { putTargetDate(item.targeted.targetDate) }
 
     override fun toRequest(): OutboxRequest = patchRecurring(kind, id) { putTargetDate(targetDate) }
 }
@@ -152,12 +114,13 @@ data class SetDefinitionPriority(
     val priority: Priority,
 ) : DefinitionMutation {
 
-    override fun apply(fields: DefinitionFields): DefinitionFields = fields.copy(priority = priority)
+    override fun apply(item: Item): Item =
+        item.copy(plugins = item.plugins.loading(item.priority.copy(priority = priority)))
 
     // The old bucket is always a real value (never absent — it defaults to Normal), so unlike
     // [SetDefinitionTargetDate] this before-image has no null branch to consider.
-    override fun beforeValues(fields: DefinitionFields): JsonObject =
-        buildJsonObject { put("priority", fields.priority.toWireToken()) }
+    override fun beforeValues(item: Item): JsonObject =
+        buildJsonObject { put("priority", item.priority.priority.toWireToken()) }
 
     override fun toRequest(): OutboxRequest = patchRecurring(kind, id) { put("priority", priority.toWireToken()) }
 }

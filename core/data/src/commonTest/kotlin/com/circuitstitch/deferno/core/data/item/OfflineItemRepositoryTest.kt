@@ -1,11 +1,7 @@
 package com.circuitstitch.deferno.core.data.item
 
 import app.cash.turbine.test
-import com.circuitstitch.deferno.core.data.create.FakeChoreLocalStore
-import com.circuitstitch.deferno.core.data.create.FakeEventLocalStore
-import com.circuitstitch.deferno.core.data.create.FakeHabitLocalStore
 import com.circuitstitch.deferno.core.data.create.FakePendingCreateStore
-import com.circuitstitch.deferno.core.data.task.FakeTaskLocalStore
 import com.circuitstitch.deferno.core.model.Cadence
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.ChoreId
@@ -42,10 +38,16 @@ import kotlin.test.assertTrue
 
 /**
  * The unified cross-kind read of [OfflineItemRepository] (ADR-0049, #226) — the read half of the Item
- * store the Tasks [Item tree] (#227) renders as one forest. Proves [observeItems] merges all four
- * per-kind caches into one list, projects each kind's common fields (incl. the de-emphasis [isTerminal]
- * signal and the Task-only subtree counts), re-emits when any kind changes, and that [refresh] delegates
- * the cross-kind `/items` cold sync to [ItemSync]. Runs on the ADR-0006 JVM-fast path against the fakes.
+ * store the Tasks [Item tree] (#227) renders as one forest. Proves [observeItems] projects the cache
+ * into one list, carries each kind's common fields (incl. the de-emphasis [isTerminal] signal and the
+ * Task-only subtree counts), re-emits when the cache changes, and that [refresh] delegates the
+ * cross-kind `/items` cold sync to [ItemSync]. Runs on the ADR-0006 JVM-fast path against the fake.
+ *
+ * **The merge became a projection at #422.** This read combined four independently-observable per-kind
+ * stores; there is one store now, so a row is projected rather than merged, and the list arrives in one
+ * `sequence` order across every kind instead of as four concatenated per-kind orders. Nothing rendered
+ * depended on the old order: the tree sorts siblings itself and the Plan takes its order from the plan
+ * rows.
  *
  * It also pins the recurring pair (#384): the rule + its moving cursor reach the row on all three
  * recurring kinds and on **neither** for a Task, and an exhausted series survives as rule-without-cursor
@@ -140,25 +142,19 @@ class OfflineItemRepositoryTest {
     )
 
     private class Fixture(
-        val tasks: FakeTaskLocalStore = FakeTaskLocalStore(),
-        val habits: FakeHabitLocalStore = FakeHabitLocalStore(),
-        val chores: FakeChoreLocalStore = FakeChoreLocalStore(),
-        val events: FakeEventLocalStore = FakeEventLocalStore(),
+        val items: FakeItemLocalStore = FakeItemLocalStore(),
         val source: FakeItemSnapshotSource = FakeItemSnapshotSource(),
         val pending: FakePendingCreateStore = FakePendingCreateStore(),
     ) {
-        val sync = ItemSync(tasks, habits, chores, events, source, pending)
-        val repository = OfflineItemRepository(tasks, habits, chores, events, sync)
+        val sync = ItemSync(items, source, pending)
+        val repository = OfflineItemRepository(items, sync)
     }
 
+    private fun cache(vararg rows: CachedItem) = FakeItemLocalStore(cacheOf(*rows))
+
     @Test
-    fun observeItemsMergesAllFourKindsIntoOneList() = runTest {
-        val f = Fixture(
-            tasks = FakeTaskLocalStore(mapOf(TaskId("t") to task("t"))),
-            habits = FakeHabitLocalStore(mapOf(HabitId("h") to habit("h"))),
-            chores = FakeChoreLocalStore(mapOf(ChoreId("c") to chore("c"))),
-            events = FakeEventLocalStore(mapOf(EventId("e") to event("e"))),
-        )
+    fun observeItemsProjectsEveryKindIntoOneList() = runTest {
+        val f = Fixture(cache(task("t").cached(), habit("h").cached(), chore("c").cached(), event("e").cached()))
 
         f.repository.observeItems().test {
             val items = awaitItem()
@@ -167,12 +163,32 @@ class OfflineItemRepositoryTest {
         }
     }
 
+    /**
+     * One `sequence` order across every kind (#422), where four stores each ordered their own rows and
+     * this reader concatenated them — all the Tasks, then all the Habits, and so on. `sequence` is unique
+     * per org across kinds, so this is the coherent order the concatenation was approximating.
+     */
+    @Test
+    fun theListIsOrderedBySequenceAcrossKindsRatherThanGroupedByKind() = runTest {
+        val f = Fixture(
+            cache(
+                task("t2", sequence = 3).cached(),
+                habit("h1", sequence = 2).cached(),
+                task("t1", sequence = 1).cached(),
+                event("e1", sequence = 4).cached(),
+            ),
+        )
+
+        f.repository.observeItems().test {
+            assertEquals(listOf("t1", "h1", "t2", "e1"), awaitItem().map { it.id })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     @Test
     fun projectsATaskWithItsParentTerminalStateAndSubtreeCounts() = runTest {
         val f = Fixture(
-            tasks = FakeTaskLocalStore(
-                mapOf(TaskId("child") to task("child", WorkingState.Done, parentId = "root", sequence = 7, descendantDone = 2, descendantTotal = 5)),
-            ),
+            cache(task("child", WorkingState.Done, parentId = "root", sequence = 7, descendantDone = 2, descendantTotal = 5).cached()),
         )
 
         f.repository.observeItems().test {
@@ -184,7 +200,7 @@ class OfflineItemRepositoryTest {
 
     @Test
     fun projectsAnActiveRecurringDefinitionAsNonTerminalWithNoSubtreeCounts() = runTest {
-        val f = Fixture(habits = FakeHabitLocalStore(mapOf(HabitId("h") to habit("h", parentId = "root", sequence = 3))))
+        val f = Fixture(cache(habit("h", parentId = "root", sequence = 3).cached()))
 
         f.repository.observeItems().test {
             val item = awaitItem().single()
@@ -201,8 +217,10 @@ class OfflineItemRepositoryTest {
         // #289: blocked/isBlocker are server-derived per item; the projection forwards them unchanged
         // for a Task and for a recurring kind (a habit can inherit `blocked` from a blocked ancestor).
         val f = Fixture(
-            tasks = FakeTaskLocalStore(mapOf(TaskId("t") to task("t", blocked = true, isBlocker = false))),
-            habits = FakeHabitLocalStore(mapOf(HabitId("h") to habit("h", blocked = false, isBlocker = true))),
+            cache(
+                task("t", blocked = true, isBlocker = false).cached(),
+                habit("h", blocked = false, isBlocker = true).cached(),
+            ),
         )
 
         f.repository.observeItems().test {
@@ -217,7 +235,7 @@ class OfflineItemRepositoryTest {
 
     @Test
     fun deEmphasizesAnArchivedRecurringDefinition() = runTest {
-        val f = Fixture(habits = FakeHabitLocalStore(mapOf(HabitId("h") to habit("h", state = DefinitionState.Archived))))
+        val f = Fixture(cache(habit("h", state = DefinitionState.Archived).cached()))
 
         f.repository.observeItems().test {
             assertTrue(awaitItem().single().isTerminal)
@@ -231,10 +249,12 @@ class OfflineItemRepositoryTest {
         // populated per kind; a Task has no definition state, so its row carries null (its lifecycle is
         // WorkingState). isTerminal is still derived (Archived → terminal) — this is the FULL state alongside it.
         val f = Fixture(
-            tasks = FakeTaskLocalStore(mapOf(TaskId("t") to task("t"))),
-            habits = FakeHabitLocalStore(mapOf(HabitId("h") to habit("h", state = DefinitionState.InReview))),
-            chores = FakeChoreLocalStore(mapOf(ChoreId("c") to chore("c"))),
-            events = FakeEventLocalStore(mapOf(EventId("e") to event("e"))),
+            cache(
+                task("t").cached(),
+                habit("h", state = DefinitionState.InReview).cached(),
+                chore("c").cached(),
+                event("e").cached(),
+            ),
         )
 
         f.repository.observeItems().test {
@@ -253,15 +273,20 @@ class OfflineItemRepositoryTest {
         // three recurring kinds, so a row can read the series without loading the concrete kind. The Task
         // arm carries NEITHER, and deliberately so: its `completeBy` is a plain deadline, not a cursor,
         // and forwarding it would make every dated Task read as a due-or-exhausted series.
+        //
+        // The two land in the same `Anchor.Deadline` once the row is read into plugins, with no field
+        // between them — which is why the projection is still built through the kind row (#439).
         val weekly = Recurrence(Cadence.Weekly(listOf("Mon", "Wed")), RecurrenceBound.AfterCount(4))
         val every3 = Recurrence(Cadence.EveryNDays(3))
         val yearly = Recurrence(Cadence.Yearly(interval = 1, month = 6, day = 14))
         val cursor = Instant.parse("2026-08-25T09:00:00Z")
         val f = Fixture(
-            tasks = FakeTaskLocalStore(mapOf(TaskId("t") to task("t", completeBy = cursor))),
-            habits = FakeHabitLocalStore(mapOf(HabitId("h") to habit("h", recurrence = weekly, completeBy = cursor))),
-            chores = FakeChoreLocalStore(mapOf(ChoreId("c") to chore("c", recurrence = every3, completeBy = cursor))),
-            events = FakeEventLocalStore(mapOf(EventId("e") to event("e", recurrence = yearly, completeBy = cursor))),
+            cache(
+                task("t", completeBy = cursor).cached(),
+                habit("h", recurrence = weekly, completeBy = cursor).cached(),
+                chore("c", recurrence = every3, completeBy = cursor).cached(),
+                event("e", recurrence = yearly, completeBy = cursor).cached(),
+            ),
         )
 
         f.repository.observeItems().test {
@@ -294,11 +319,9 @@ class OfflineItemRepositoryTest {
             ),
         )
         val f = Fixture(
-            habits = FakeHabitLocalStore(
-                mapOf(
-                    HabitId("h") to habit("h", recurrence = Recurrence(Cadence.Weekly(listOf("Mon"))))
-                        .copy(seriesId = "s-1", series = inputs),
-                ),
+            cache(
+                habit("h", recurrence = Recurrence(Cadence.Weekly(listOf("Mon"))))
+                    .copy(seriesId = "s-1", series = inputs).cached(),
             ),
         )
 
@@ -328,7 +351,7 @@ class OfflineItemRepositoryTest {
         // `null` means two different things on this projection and only one of them is about series: for
         // a Task it means "not a series at all", for a recurring kind it is the backend's elision. The
         // Task arm must never acquire either field by accident.
-        val f = Fixture(tasks = FakeTaskLocalStore(mapOf(TaskId("t") to task("t"))))
+        val f = Fixture(cache(task("t").cached()))
 
         f.repository.observeItems().test {
             val item = awaitItem().single()
@@ -345,9 +368,7 @@ class OfflineItemRepositoryTest {
         // The projection must preserve that shape verbatim — collapsing either half would erase the
         // distinction between "series ran out" and "not a series at all" that [recurrenceCursor] reads.
         val f = Fixture(
-            habits = FakeHabitLocalStore(
-                mapOf(HabitId("h") to habit("h", recurrence = Recurrence(Cadence.Daily, RecurrenceBound.AfterCount(4)), completeBy = null)),
-            ),
+            cache(habit("h", recurrence = Recurrence(Cadence.Daily, RecurrenceBound.AfterCount(4)), completeBy = null).cached()),
         )
 
         f.repository.observeItems().test {
@@ -363,7 +384,7 @@ class OfflineItemRepositoryTest {
     fun projectsARecurringDefinitionWithNoRuleAsCarryingNeitherReading() = runTest {
         // A definition whose rule did not survive the wire still projects: rule null, cursor whatever it
         // was. The reading is NoCursor — the rule, not the cursor, is what says "this is a series".
-        val f = Fixture(habits = FakeHabitLocalStore(mapOf(HabitId("h") to habit("h", completeBy = Instant.parse("2026-06-16T09:00:00Z")))))
+        val f = Fixture(cache(habit("h", completeBy = Instant.parse("2026-06-16T09:00:00Z")).cached()))
 
         f.repository.observeItems().test {
             val item = awaitItem().single()
@@ -374,16 +395,16 @@ class OfflineItemRepositoryTest {
     }
 
     @Test
-    fun reEmitsWhenAnyKindChanges() = runTest {
+    fun reEmitsWhenTheCacheChanges() = runTest {
         val f = Fixture()
 
         f.repository.observeItems().test {
             assertTrue(awaitItem().isEmpty())
 
-            f.habits.upsert(habit("h"))
+            f.items.upsert(habit("h").cached())
             assertEquals(listOf("h" to ItemKind.Habit), awaitItem().map { it.id to it.kind })
 
-            f.tasks.upsert(task("t"))
+            f.items.upsert(task("t").cached())
             assertEquals(setOf("h", "t"), awaitItem().map { it.id }.toSet())
             cancelAndIgnoreRemainingEvents()
         }
@@ -398,12 +419,12 @@ class OfflineItemRepositoryTest {
             chores = listOf(chore("c")),
             events = listOf(event("e")),
         )
-        assertTrue(f.repository.observeItems().first().isEmpty()) // empty caches before the pull
+        assertTrue(f.repository.observeItems().first().isEmpty()) // empty cache before the pull
 
         f.repository.refresh()
 
-        // refresh() commits all four per-kind reconciles before returning, so the next read is the
-        // fully-merged set (not one of combine's per-commit intermediate emissions).
+        // refresh() commits one reconcile before returning, so the next read is the whole set. It used to
+        // commit four, and this read could land on any of the intermediate combine emissions.
         assertEquals(setOf("t", "h", "c", "e"), f.repository.observeItems().first().map { it.id }.toSet())
     }
 }

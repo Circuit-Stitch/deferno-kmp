@@ -1,9 +1,10 @@
 package com.circuitstitch.deferno.core.data.task
 
-import com.circuitstitch.deferno.core.data.chore.ChoreLocalStore
-import com.circuitstitch.deferno.core.data.event.EventLocalStore
-import com.circuitstitch.deferno.core.data.habit.HabitLocalStore
+import com.circuitstitch.deferno.core.data.item.CachedItem
+import com.circuitstitch.deferno.core.data.item.ItemLocalStore
 import com.circuitstitch.deferno.core.data.item.ItemSync
+import com.circuitstitch.deferno.core.data.item.asKindRow
+import com.circuitstitch.deferno.core.data.item.asTaskOrNull
 import com.circuitstitch.deferno.core.model.Chore
 import com.circuitstitch.deferno.core.model.DefinitionState
 import com.circuitstitch.deferno.core.model.Event
@@ -14,8 +15,12 @@ import com.circuitstitch.deferno.core.model.SearchHit
 import com.circuitstitch.deferno.core.model.Task
 import com.circuitstitch.deferno.core.model.TaskId
 import com.circuitstitch.deferno.core.model.WorkingState
+import com.circuitstitch.deferno.core.model.recipe.KindRecipe
+import com.circuitstitch.deferno.core.model.recipe.KindRow
+import com.circuitstitch.deferno.core.model.recipe.ParityRecipe
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -29,33 +34,37 @@ import kotlin.time.Instant
  * from the legacy task-only `GET /tasks` to the item-wide `GET /items`, so a refresh now reconciles
  * *every* kind (Task/Habit/Chore/Event) into its store — honoring the server-windowed done-visibility
  * window — not just Tasks. That cross-kind reconcile lives in [ItemSync]; this repository just triggers
- * it (the trigger seam stays [TaskRepository.refresh] so its callers are unchanged). The Task reads
- * below are unaffected — they still observe the Task store.
+ * it (the trigger seam stays [TaskRepository.refresh] so its callers are unchanged).
  *
  * **Hydration ([hydrate]).** Opening a Task pulls its full detail (`GET /tasks/{id}`) and upserts it,
  * upgrading the cached row summary -> full; a missing/failed detail is a no-op (the summary stays).
  *
  * **Search ([search]) — offline (#311, ADR-0042).** Reverses the legacy online-only `/tasks/search` pull:
- * global search now runs as a local read over the four per-kind caches (the same stores [ItemSync] feeds),
- * so it works with no network. The recurring stores are read for the cross-kind text/label match; the
- * status/date/attachment filters are Task-scoped (recurring kinds carry no [WorkingState] / attachment
- * rollup). Results are not written into the observed list — search stays a separate read surface (ADR-0001).
+ * global search runs as a local read over the cache (the same store [ItemSync] feeds), so it works with
+ * no network. Every kind is read for the cross-kind text and label match; the status, date and
+ * attachment filters are Task-scoped, because the recurring kinds carry no [WorkingState] and no
+ * attachment rollup. Results are not written into the observed list — search stays a separate read
+ * surface (ADR-0001).
+ *
+ * **This repository still speaks [Task] (ADR-0056).** The cache is plugin-shaped since #422, so the rows
+ * it hands out are built through the recipe's write direction. Moving its callers onto the plugin record
+ * is Phase 4, one Family at a time.
  */
 class OfflineTaskRepository(
-    private val localStore: TaskLocalStore,
+    private val items: ItemLocalStore,
     private val remoteSource: TaskRemoteSource,
     private val itemSync: ItemSync,
-    private val habitStore: HabitLocalStore,
-    private val choreStore: ChoreLocalStore,
-    private val eventStore: EventLocalStore,
     // The zone used to project an item's `completeBy` Instant to a calendar day for the date-range filter
     // (#311). Defaulted to the device zone so production DI needn't provide one; a test pins it.
     private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
+    private val recipe: KindRecipe = ParityRecipe,
 ) : TaskRepository {
 
-    override fun observeTasks(): Flow<List<Task>> = localStore.observeActive()
+    override fun observeTasks(): Flow<List<Task>> =
+        items.observeActive(ItemKind.Task).map { rows -> rows.map { recipe.writeTask(it.item) } }
 
-    override fun observeTask(id: TaskId): Flow<Task?> = localStore.observe(id)
+    override fun observeTask(id: TaskId): Flow<Task?> =
+        items.observe(id.value).map { it?.asTaskOrNull(recipe) }
 
     override suspend fun refresh() = itemSync.refresh()
 
@@ -64,13 +73,12 @@ class OfflineTaskRepository(
         // The `/tasks/{id}` detail does not carry the server-computed subtree counts (those are an
         // `/items`-snapshot computation, ADR-0049) — so preserve the cached counts the snapshot set,
         // rather than blanking a collapsed tree node's progress badge on detail-open (#226/#227).
-        val existing = localStore.get(id)
-        localStore.upsert(
-            detail.copy(
-                descendantDone = detail.descendantDone ?: existing?.descendantDone,
-                descendantTotal = detail.descendantTotal ?: existing?.descendantTotal,
-            ),
+        val existing = items.get(id.value)?.asTaskOrNull(recipe)
+        val merged = detail.copy(
+            descendantDone = detail.descendantDone ?: existing?.descendantDone,
+            descendantTotal = detail.descendantTotal ?: existing?.descendantTotal,
         )
+        items.upsert(CachedItem(recipe.read(merged), ItemKind.Task))
     }
 
     /**
@@ -88,12 +96,15 @@ class OfflineTaskRepository(
             .sortedWith(query.sort.comparator())
     }
 
-    /** Snapshot the four caches once and flatten them to the common [SearchRow] shape. */
-    private suspend fun collectSearchRows(): List<SearchRow> = buildList {
-        localStore.observeActive().first().forEach { add(it.toSearchRow()) }
-        habitStore.observeActive().first().forEach { add(it.toSearchRow()) }
-        choreStore.observeActive().first().forEach { add(it.toSearchRow()) }
-        eventStore.observeActive().first().forEach { add(it.toSearchRow()) }
+    /** Snapshot the cache once and flatten it to the common [SearchRow] shape. */
+    private suspend fun collectSearchRows(): List<SearchRow> =
+        items.observeActive().first().map { it.toSearchRow() }
+
+    private fun CachedItem.toSearchRow(): SearchRow = when (val row = asKindRow(recipe)) {
+        is KindRow.OfTask -> row.task.toSearchRow()
+        is KindRow.OfHabit -> row.habit.toSearchRow()
+        is KindRow.OfChore -> row.chore.toSearchRow()
+        is KindRow.OfEvent -> row.event.toSearchRow()
     }
 
     private fun SearchRow.matches(query: TaskSearchQuery): Boolean {

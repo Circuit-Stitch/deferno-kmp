@@ -5,12 +5,10 @@ import com.circuitstitch.deferno.core.data.attachment.AttachmentBytesStore
 import com.circuitstitch.deferno.core.data.attachment.InMemoryAttachmentBytesStore
 import com.circuitstitch.deferno.core.data.attachment.LocalAttachmentRepository
 import com.circuitstitch.deferno.core.data.attachment.StorageProviderId
-import com.circuitstitch.deferno.core.data.create.FakeChoreLocalStore
-import com.circuitstitch.deferno.core.data.create.FakeEventLocalStore
-import com.circuitstitch.deferno.core.data.create.FakeHabitLocalStore
 import com.circuitstitch.deferno.core.data.create.FakePendingCreateStore
+import com.circuitstitch.deferno.core.data.item.FakeItemLocalStore
+import com.circuitstitch.deferno.core.data.item.cached
 import com.circuitstitch.deferno.core.data.outbox.FakeOutboxStore
-import com.circuitstitch.deferno.core.data.task.FakeTaskLocalStore
 import com.circuitstitch.deferno.core.database.sql.DefernoDatabase
 import com.circuitstitch.deferno.core.model.HydrationState
 import com.circuitstitch.deferno.core.model.Task
@@ -37,7 +35,7 @@ import kotlin.time.Instant
  * restores them as **local on-device attachments** re-linked to the item — offline, no network. Proved
  * against a **real** [LocalAttachmentRepository] over an in-memory `JdbcSqliteDriver` (ADR-0006 JVM-fast
  * path, the same idiom as `LocalAttachmentRepositoryTest`); the item spine reuses the commonTest store
- * fakes. The pure items-only paths stay in the commonTest exporter/importer suites.
+ * fake. The pure items-only paths stay in the commonTest exporter/importer suites.
  */
 class BackupAttachmentsJvmTest {
 
@@ -59,19 +57,15 @@ class BackupAttachmentsJvmTest {
     )
 
     private fun exporter(tasks: List<Task>, repo: LocalAttachmentRepository) = BackupExporter(
-        taskStore = FakeTaskLocalStore(tasks.associateBy { it.id }),
-        habitStore = FakeHabitLocalStore(),
-        choreStore = FakeChoreLocalStore(),
-        eventStore = FakeEventLocalStore(),
+        FakeItemLocalStore(tasks.map { it.cached() }.associateBy { it.id }),
         localAttachments = repo,
     )
 
     private class ImportFixture(repo: LocalAttachmentRepository) {
-        val taskStore = FakeTaskLocalStore()
+        val items = FakeItemLocalStore()
         val outbox = FakeOutboxStore()
         val importer = BackupImporter(
-            taskStore, FakeHabitLocalStore(), FakeChoreLocalStore(), FakeEventLocalStore(),
-            outbox, FakePendingCreateStore(), repo,
+            items, outbox, FakePendingCreateStore(), repo,
             now = { Instant.parse("2026-06-28T00:00:00Z") },
         )
     }
@@ -209,7 +203,7 @@ class BackupAttachmentsJvmTest {
 
         assertEquals(ImportResult.Malformed, f.importer.import(zip))
         // Nothing written — not the item, not the attachment (the pure pass caught the missing blob).
-        assertTrue(f.taskStore.all.isEmpty())
+        assertTrue(f.items.all.isEmpty())
         assertTrue(f.outbox.all.isEmpty())
         assertNull(restored.get("ghost"))
     }
